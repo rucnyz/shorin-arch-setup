@@ -106,25 +106,24 @@ echo "$TARGET_USER ALL=(ALL) NOPASSWD: ALL" > "$SUDO_TEMP_FILE"
 chmod 440 "$SUDO_TEMP_FILE"
 
 # ------------------------------------------------------------------------------
-# 4. Install Dependencies (Split Strategy)
+# 4. Install Dependencies (Split Strategy + Retry)
 # ------------------------------------------------------------------------------
 log "Step 4/9: Installing dependencies from niri-applist.txt..."
 
 LIST_FILE="$PARENT_DIR/niri-applist.txt"
 
 if [ -f "$LIST_FILE" ]; then
+    # tr -d '\r' Fixes Windows line endings
     mapfile -t PACKAGE_ARRAY < <(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | tr -d '\r')
     
     if [ ${#PACKAGE_ARRAY[@]} -gt 0 ]; then
         BATCH_LIST=""
         GIT_LIST=()
 
-        # 分类逻辑：Git包进数组，普通包进字符串
+        # Sort packages
         for pkg in "${PACKAGE_ARRAY[@]}"; do
-            # 自动纠错
             if [ "$pkg" == "imagemagic" ]; then pkg="imagemagick"; fi
             
-            # 判断是否以 -git 结尾
             if [[ "$pkg" == *"-git" ]]; then
                 GIT_LIST+=("$pkg")
             else
@@ -132,33 +131,45 @@ if [ -f "$LIST_FILE" ]; then
             fi
         done
         
-        # --- 阶段 1: 批量安装普通包 ---
+        # --- Phase 1: Batch Install Standard Packages ---
         if [ -n "$BATCH_LIST" ]; then
             log "-> [Batch] Installing standard repository packages..."
             if runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None $BATCH_LIST; then
                 success "Standard packages installed."
             else
-                warn "Batch install had issues. Attempting one-by-one fallback for standard packages..."
+                warn "Batch install had issues. Attempting one-by-one with Retry..."
                 for pkg in $BATCH_LIST; do
-                    runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$pkg"
+                    if runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$pkg"; then
+                        :
+                    else
+                        warn "Failed to install '$pkg'. Retrying (Attempt 2/2)..."
+                        if runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$pkg"; then
+                             success "Installed '$pkg' on second attempt."
+                        else
+                             error "Failed to install '$pkg' after 2 attempts. Skipping."
+                        fi
+                    fi
                 done
             fi
         fi
 
-        # --- 阶段 2: 逐个安装 Git 包 ---
+        # --- Phase 2: One-by-One Install Git Packages ---
         if [ ${#GIT_LIST[@]} -gt 0 ]; then
-            log "-> [Slow] Installing ${#GIT_LIST[@]} '-git' packages individually (compilation may take time)..."
+            log "-> [Slow] Installing ${#GIT_LIST[@]} '-git' packages individually..."
             for git_pkg in "${GIT_LIST[@]}"; do
                 log "-> Compiling/Installing: $git_pkg ..."
                 if runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$git_pkg"; then
                     success "Installed: $git_pkg"
                 else
-                    error "Failed to install: $git_pkg (Check logs for compilation errors)."
-                    # 不退出脚本，继续装下一个
+                    warn "Failed to install '$git_pkg'. Retrying (Attempt 2/2)..."
+                    if runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$git_pkg"; then
+                        success "Installed: $git_pkg (on retry)"
+                    else
+                        error "Failed to install: $git_pkg after 2 attempts."
+                    fi
                 fi
             done
         fi
-        
         success "Dependency installation phase completed."
     else
         warn "niri-applist.txt is empty."
@@ -185,6 +196,7 @@ if [ -d "$TEMP_DIR/dotfiles" ]; then
     runuser -u "$TARGET_USER" -- tar -czf "$HOME_DIR/$BACKUP_NAME" -C "$HOME_DIR" .config
     
     log "-> Applying new dotfiles..."
+    # Copy as user to avoid permission issues
     runuser -u "$TARGET_USER" -- cp -rf "$TEMP_DIR/dotfiles/." "$HOME_DIR/"
     success "Dotfiles applied."
 else
@@ -263,8 +275,9 @@ EOT
     mkdir -p "$WANTS_DIR"
     ln -sf "../niri-autostart.service" "$WANTS_DIR/niri-autostart.service"
 
-    # 9.4 Permission Fix
-    chown -R "$TARGET_USER:$TARGET_USER" "$HOME_DIR/.config"
+    # 9.4 Permission Fix (Surgical)
+    # Only fix the specific directory we messed with as root
+    chown -R "$TARGET_USER:$TARGET_USER" "$HOME_DIR/.config/systemd"
     
     success "TTY Auto-login configured."
 fi
