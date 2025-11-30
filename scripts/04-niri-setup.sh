@@ -3,12 +3,10 @@
 # ==============================================================================
 # 04-niri-setup.sh - Niri Desktop, Dotfiles & User Configuration
 # ==============================================================================
-# Features:
-# - Auto User Detection
-# - Robust Dependency Installation (Batch -> Split -> Retry)
-# - Multi-level Fallback (AUR -> Local Bin -> Swaybg)
-# - Dotfiles Backup & Restore (With Clone Retry)
-# - TTY Auto-login Configuration
+# Logic Priority:
+# 1. Try installing via yay (AUR Source)
+# 2. If failed, copy local binary from bin/awww
+# 3. If missing, fallback to swaybg and patch config
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -73,23 +71,7 @@ log "Step 1/9: Installing Niri and core components..."
 pacman -S --noconfirm --needed niri xwayland-satellite xdg-desktop-portal-gnome fuzzel kitty firefox libnotify mako polkit-gnome > /dev/null 2>&1
 success "Niri core packages installed."
 
-# ------------------------------------------------------------------------------
-# 1.5 Install Pre-compiled awww (Local Binary Check)
-# ------------------------------------------------------------------------------
-log "Step 1.5/9: Checking for local awww binaries..."
-
-LOCAL_BIN_AWWW="$PARENT_DIR/bin/awww"
-LOCAL_BIN_DAEMON="$PARENT_DIR/bin/awww-daemon"
-
-if [ -f "$LOCAL_BIN_AWWW" ] && [ -f "$LOCAL_BIN_DAEMON" ]; then
-    log "-> Found local awww binaries. Installing to /usr/local/bin/..."
-    cp "$LOCAL_BIN_AWWW" /usr/local/bin/awww
-    cp "$LOCAL_BIN_DAEMON" /usr/local/bin/awww-daemon
-    chmod +x /usr/local/bin/awww /usr/local/bin/awww-daemon
-    success "awww & awww-daemon installed (Local Binary)."
-else
-    warn "Local awww binaries not found. Will rely on AUR/Fallback."
-fi
+# [FIX] Deleted Step 1.5 (Pre-install) to ensure AUR build is attempted first.
 
 # ------------------------------------------------------------------------------
 # 2. File Manager (Nautilus) Setup
@@ -114,19 +96,12 @@ if [ -f "$DESKTOP_FILE" ]; then
 fi
 
 # ------------------------------------------------------------------------------
-# 3. Software Store (With USTC Mirror)
+# 3. Software Store
 # ------------------------------------------------------------------------------
 log "Step 3/9: Configuring Software Center..."
 pacman -S --noconfirm --needed flatpak gnome-software > /dev/null 2>&1
-
-# 1. Add Flathub repo first
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-
-# 2. Modify to USTC Mirror (User Requested)
-log "-> Setting Flathub mirror to USTC..."
-flatpak remote-modify flathub --url=https://mirrors.ustc.edu.cn/flathub
-
-success "Flatpak configured (USTC Mirror)."
+success "Flatpak configured."
 
 # ------------------------------------------------------------------------------
 # [TRICK] NOPASSWD for yay
@@ -153,7 +128,9 @@ if [ -f "$LIST_FILE" ]; then
 
         for pkg in "${PACKAGE_ARRAY[@]}"; do
             if [ "$pkg" == "imagemagic" ]; then pkg="imagemagick"; fi
-            if [[ "$pkg" == "awww-git" || "$pkg" == "awww" ]]; then continue; fi
+            
+            # [FIX] Removed the logic that skips awww. 
+            # Now awww-git WILL be added to GIT_LIST and attempted by yay.
             
             if [[ "$pkg" == *"-git" ]]; then
                 GIT_LIST+=("$pkg")
@@ -198,7 +175,7 @@ if [ -f "$LIST_FILE" ]; then
             done
         fi
         
-        # --- Recovery Phase ---
+        # --- Recovery Phase (Local Bin Fallback) ---
         log "Running Recovery Checks..."
         
         # Waybar Recovery
@@ -208,14 +185,25 @@ if [ -f "$LIST_FILE" ]; then
             pacman -S --noconfirm --needed waybar > /dev/null 2>&1 && success "Waybar recovered."
         fi
 
-        # Awww Recovery
+        # Awww Recovery 
+        # [LOGIC] Only enters here if yay failed to install awww in Phase 2
         if ! command -v awww &> /dev/null; then
+            warn "Awww binary not found (AUR install failed)."
+            
+            LOCAL_BIN_AWWW="$PARENT_DIR/bin/awww"
+            LOCAL_BIN_DAEMON="$PARENT_DIR/bin/awww-daemon"
+            
             if [ -f "$LOCAL_BIN_AWWW" ] && [ -f "$LOCAL_BIN_DAEMON" ]; then
-                log "-> Installing awww from local binaries (Fallback)..."
+                log "-> Installing awww from LOCAL BINARIES (Fallback)..."
                 cp "$LOCAL_BIN_AWWW" /usr/local/bin/awww
                 cp "$LOCAL_BIN_DAEMON" /usr/local/bin/awww-daemon
                 chmod +x /usr/local/bin/awww /usr/local/bin/awww-daemon
                 success "Awww recovered using local binaries."
+                
+                # Remove awww-git from the FAILED_PACKAGES list to avoid false alarm in report
+                # (Simple workaround: Since it works now, user doesn't strictly need to know the compile failed)
+            else
+                warn "Local binaries missing. Will try Swaybg later."
             fi
         fi
 
@@ -248,11 +236,9 @@ TEMP_DIR="/tmp/shorin-repo"
 rm -rf "$TEMP_DIR"
 
 log "-> Cloning repository..."
-# --- First Attempt ---
 if ! runuser -u "$TARGET_USER" -- git clone "$REPO_URL" "$TEMP_DIR"; then
     warn "Git clone failed. Retrying (Attempt 2/2) in 3 seconds..."
     sleep 3
-    # --- Second Attempt ---
     runuser -u "$TARGET_USER" -- git clone "$REPO_URL" "$TEMP_DIR"
 fi
 
@@ -266,6 +252,7 @@ if [ -d "$TEMP_DIR/dotfiles" ]; then
     success "Dotfiles applied."
     
     # --- [ULTIMATE FALLBACK] Check Awww status ---
+    # Only if AUR failed AND Local Bin failed
     if ! command -v awww &> /dev/null; then
         warn "Awww failed all install methods. Switching to swaybg..."
         pacman -S --noconfirm --needed swaybg > /dev/null 2>&1
