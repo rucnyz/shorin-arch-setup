@@ -38,3 +38,4 @@ swaybg
 imv
 mission-center
 neovim
+python-pywalfox
