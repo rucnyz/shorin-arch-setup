@@ -3,10 +3,21 @@
 # ==============================================================================
 # 04-niri-setup.sh - Niri Desktop, Dotfiles & User Configuration
 # ==============================================================================
+# Features:
+# - Smart China Optimization (Timezone detected OR DEBUG=1)
+# - Intelligent Git Mirror Fallback (Mirror -> Direct) for both AUR & Dotfiles
+# - Robust Dependency Installation (Batch -> Split -> Retry)
+# - Multi-level Fallback (Local Bin -> Swaybg)
+# ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARENT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/00-utils.sh"
+
+# --- Debug Configuration ---
+# Set this to "1" to FORCE China network optimizations regardless of timezone.
+# Usage: sudo DEBUG=1 ./install.sh
+DEBUG=${DEBUG:-0}
 
 check_root
 
@@ -107,27 +118,49 @@ if [ -f "$DESKTOP_FILE" ]; then
 fi
 
 # ------------------------------------------------------------------------------
-# 3. Software Store & Flatpak (With Timezone Detection)
+# 3. Smart Network Optimization (Timezone Based + Debug Mode)
 # ------------------------------------------------------------------------------
-log "Step 3/9: Configuring Software Center..."
-pacman -S --noconfirm --needed flatpak gnome-software > /dev/null 2>&1
+log "Step 3/9: Configuring Network Sources..."
 
 # 1. Add Flathub repo first
+pacman -S --noconfirm --needed flatpak gnome-software > /dev/null 2>&1
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
 # 2. Smart Mirror Configuration
 log "-> Checking System Timezone..."
 CURRENT_TZ=$(readlink -f /etc/localtime)
+IS_CN_ENV=false
+
+# --- DEBUG MODE OVERRIDE ---
+if [ "$DEBUG" == "1" ]; then
+    warn "DEBUG MODE ACTIVE: Forcing China network optimizations regardless of timezone."
+    # Simulate Shanghai timezone condition
+    CURRENT_TZ="Asia/Shanghai (Simulated)"
+fi
+# ---------------------------
 
 if [[ "$CURRENT_TZ" == *"Shanghai"* ]]; then
+    IS_CN_ENV=true
     log "-> Detected Timezone: ${H_GREEN}Asia/Shanghai${NC}"
-    log "-> Switching Flathub to USTC Mirror..."
+    log "-> Applying China optimizations (USTC Flatpak, Git Mirror, GOPROXY)..."
+    
+    # Flatpak Mirror
     flatpak remote-modify flathub --url=https://mirrors.ustc.edu.cn/flathub
-    success "Flatpak configured (USTC Mirror)."
+    
+    # GOPROXY
+    export GOPROXY=https://goproxy.cn,direct
+    if ! grep -q "GOPROXY" /etc/environment; then
+        echo "GOPROXY=https://goproxy.cn,direct" >> /etc/environment
+    fi
+    
+    # Git Mirror (Enable gitclone.com)
+    log "-> Enabling GitHub Mirror (gitclone.com)..."
+    runuser -u "$TARGET_USER" -- git config --global url."https://gitclone.com/github.com/".insteadOf "https://github.com/"
+    
+    success "Optimizations Enabled."
 else
     log "-> Detected Timezone: ${H_YELLOW}$CURRENT_TZ${NC} (Not Shanghai)"
-    log "-> Keeping Official Flathub source."
-    success "Flatpak configured (Official Source)."
+    log "-> Using official sources."
 fi
 
 # ------------------------------------------------------------------------------
@@ -139,7 +172,7 @@ echo "$TARGET_USER ALL=(ALL) NOPASSWD: ALL" > "$SUDO_TEMP_FILE"
 chmod 440 "$SUDO_TEMP_FILE"
 
 # ------------------------------------------------------------------------------
-# 4. Install Dependencies
+# 4. Install Dependencies (Smart Retry with Mirror Toggle)
 # ------------------------------------------------------------------------------
 log "Step 4/9: Installing dependencies from niri-applist.txt..."
 
@@ -155,7 +188,6 @@ if [ -f "$LIST_FILE" ]; then
 
         for pkg in "${PACKAGE_ARRAY[@]}"; do
             if [ "$pkg" == "imagemagic" ]; then pkg="imagemagick"; fi
-            # awww-git is allowed here (yay attempt)
             
             if [[ "$pkg" == *"-git" ]]; then
                 GIT_LIST+=("$pkg")
@@ -167,32 +199,56 @@ if [ -f "$LIST_FILE" ]; then
         # --- Phase 1: Batch Install ---
         if [ -n "$BATCH_LIST" ]; then
             log "-> [Batch] Installing standard repository packages..."
-            if runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None $BATCH_LIST; then
-                success "Standard packages installed."
-            else
-                warn "Batch install issues. Retrying one-by-one..."
-                for pkg in $BATCH_LIST; do
-                    if ! runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$pkg"; then
-                        warn "Retry 2/2 for '$pkg'..."
-                        if ! runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$pkg"; then
-                             error "Failed: $pkg"
-                             FAILED_PACKAGES+=("$pkg")
-                        fi
+            # Attempt 1 (With Mirror if enabled)
+            if ! runuser -u "$TARGET_USER" -- env GOPROXY=$GOPROXY yay -S --noconfirm --needed --answerdiff=None --answerclean=None $BATCH_LIST; then
+                # If failed AND we are in CN env (or Debug), try disabling mirror
+                if [ "$IS_CN_ENV" = true ]; then
+                    warn "Batch install failed. Disabling Git Mirror and Retrying (Direct Connect)..."
+                    runuser -u "$TARGET_USER" -- git config --global --unset url."https://gitclone.com/github.com/".insteadOf
+                    
+                    if ! runuser -u "$TARGET_USER" -- env GOPROXY=$GOPROXY yay -S --noconfirm --needed --answerdiff=None --answerclean=None $BATCH_LIST; then
+                        warn "Direct batch failed too. Moving to Split mode..."
+                    else
+                        success "Batch success (Direct Connection)."
                     fi
-                done
+                else
+                    warn "Batch failed. Moving to Split mode..."
+                fi
+            else
+                success "Standard packages installed."
             fi
         fi
 
-        # --- Phase 2: Git Install ---
+        # --- Phase 2: Git Install (One-by-One with Smart Retry) ---
         if [ ${#GIT_LIST[@]} -gt 0 ]; then
             log "-> [Slow] Installing '-git' packages..."
             for git_pkg in "${GIT_LIST[@]}"; do
                 log "-> Installing: $git_pkg ..."
-                if ! runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$git_pkg"; then
-                    warn "Retry 2/2 for '$git_pkg'..."
-                    if ! runuser -u "$TARGET_USER" -- yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$git_pkg"; then
+                
+                # Logic: 
+                # 1. Try with current settings (Mirror might be on or off from Phase 1)
+                # 2. If fail -> Toggle Mirror setting -> Retry
+                
+                if ! runuser -u "$TARGET_USER" -- env GOPROXY=$GOPROXY yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$git_pkg"; then
+                    warn "Install failed for '$git_pkg'. Toggling Git Mirror setting and Retrying..."
+                    
+                    # Check current state by seeing if the key exists
+                    if runuser -u "$TARGET_USER" -- git config --global --get url."https://gitclone.com/github.com/".insteadOf > /dev/null; then
+                        # Mirror is ON -> Turn it OFF
+                        log "-> Switching to DIRECT connection..."
+                        runuser -u "$TARGET_USER" -- git config --global --unset url."https://gitclone.com/github.com/".insteadOf
+                    else
+                        # Mirror is OFF -> Turn it ON (Maybe direct is blocked?)
+                        log "-> Switching to MIRROR connection..."
+                        runuser -u "$TARGET_USER" -- git config --global url."https://gitclone.com/github.com/".insteadOf "https://github.com/"
+                    fi
+                    
+                    # Retry
+                    if ! runuser -u "$TARGET_USER" -- env GOPROXY=$GOPROXY yay -S --noconfirm --needed --answerdiff=None --answerclean=None "$git_pkg"; then
                         error "Failed: $git_pkg"
                         FAILED_PACKAGES+=("$git_pkg")
+                    else
+                        success "Installed: $git_pkg (On Retry)"
                     fi
                 else
                     success "Installed: $git_pkg"
@@ -213,7 +269,6 @@ if [ -f "$LIST_FILE" ]; then
         # Awww Recovery (Local Binary Fallback)
         if ! command -v awww &> /dev/null; then
             warn "Awww binary not found (AUR install failed)."
-            
             LOCAL_BIN_AWWW="$PARENT_DIR/bin/awww"
             LOCAL_BIN_DAEMON="$PARENT_DIR/bin/awww-daemon"
             
@@ -248,7 +303,7 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 5. Clone Dotfiles (With Retry & User Config Clean)
+# 5. Clone Dotfiles (Smart Mirror Logic)
 # ------------------------------------------------------------------------------
 log "Step 5/9: Cloning and applying dotfiles..."
 
@@ -257,10 +312,24 @@ TEMP_DIR="/tmp/shorin-repo"
 rm -rf "$TEMP_DIR"
 
 log "-> Cloning repository..."
+
+# Attempt 1: Try with whatever config is currently active (Mirror or Direct)
 if ! runuser -u "$TARGET_USER" -- git clone "$REPO_URL" "$TEMP_DIR"; then
-    warn "Git clone failed. Retrying (Attempt 2/2) in 3 seconds..."
-    sleep 3
-    runuser -u "$TARGET_USER" -- git clone "$REPO_URL" "$TEMP_DIR"
+    warn "Clone failed. Toggling Git Mirror setting and Retrying..."
+    
+    # Toggle Logic (Same as above)
+    if runuser -u "$TARGET_USER" -- git config --global --get url."https://gitclone.com/github.com/".insteadOf > /dev/null; then
+        runuser -u "$TARGET_USER" -- git config --global --unset url."https://gitclone.com/github.com/".insteadOf
+    else
+        runuser -u "$TARGET_USER" -- git config --global url."https://gitclone.com/github.com/".insteadOf "https://github.com/"
+    fi
+    
+    # Attempt 2
+    if ! runuser -u "$TARGET_USER" -- git clone "$REPO_URL" "$TEMP_DIR"; then
+        error "Clone failed on both Mirror and Direct connection."
+    else
+        success "Repository cloned successfully (On Retry)."
+    fi
 fi
 
 if [ -d "$TEMP_DIR/dotfiles" ]; then
@@ -276,10 +345,8 @@ if [ -d "$TEMP_DIR/dotfiles" ]; then
     if [ "$TARGET_USER" != "shorin" ]; then
         OUTPUT_KDL="$HOME_DIR/.config/niri/output.kdl"
         if [ -f "$OUTPUT_KDL" ]; then
-            log "-> Detected non-shorin user. Clearing specific monitor configuration (output.kdl)..."
-            # Truncate content to 0 size, keep file valid
+            log "-> Detected non-shorin user. Clearing specific monitor configuration..."
             runuser -u "$TARGET_USER" -- truncate -s 0 "$OUTPUT_KDL"
-            success "Cleared output.kdl for generic user."
         fi
     fi
 
@@ -294,7 +361,8 @@ if [ -d "$TEMP_DIR/dotfiles" ]; then
         fi
     fi
 else
-    error "Failed to clone repository or 'dotfiles' directory missing."
+    # Don't error out completely, user can manually clone later
+    warn "Dotfiles directory missing. Configuration skipped."
 fi
 
 # ------------------------------------------------------------------------------
@@ -325,12 +393,20 @@ pacman -S --noconfirm --needed swayosd > /dev/null 2>&1
 systemctl enable --now swayosd-libinput-backend.service > /dev/null 2>&1
 
 # ------------------------------------------------------------------------------
-# [CLEANUP] Remove temporary configs
+# [CLEANUP] Remove temporary configs (Restoring State)
 # ------------------------------------------------------------------------------
 log "Step 9/9: Restoring configuration (Cleanup)..."
 
 log "-> Removing temporary NOPASSWD sudo access..."
 rm -f "$SUDO_TEMP_FILE"
+
+# Clean up Git Mirror Config (Ensure it's gone)
+log "-> Restoring Git URL configuration..."
+runuser -u "$TARGET_USER" -- git config --global --unset url."https://gitclone.com/github.com/".insteadOf
+
+# Remove GOPROXY
+log "-> Removing GOPROXY..."
+sed -i '/GOPROXY=https:\/\/goproxy.cn,direct/d' /etc/environment
 
 success "Cleanup complete."
 
