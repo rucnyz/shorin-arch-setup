@@ -8,6 +8,7 @@ gnome-clocks
 gnome-calendar
 fragments
 typora-free
+btop
 
 # --- Flatpak Packages (Prefix with flatpak:) ---
 flatpak:io.github.fabrialberio.pinapp
