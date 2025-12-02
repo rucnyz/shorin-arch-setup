@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# 04-niri-setup.sh - Niri Desktop (Visual Enhanced v9.1)
+# 04-niri-setup.sh - Niri Desktop (Visual Enhanced v11.0)
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,19 +54,14 @@ HOME_DIR="/home/$TARGET_USER"
 info_kv "Target" "$TARGET_USER"
 
 # ------------------------------------------------------------------------------
-# [LOGIC] Auto-Login Decision Matrix
+# [SAFETY CHECK] Detect Existing Display Managers
 # ------------------------------------------------------------------------------
-log "Checking for installed Display Managers..."
+log "Checking Display Managers..."
 
-KNOWN_DMS=(
-    "gdm" "sddm" "lightdm" "lxdm" "slim" "xorg-xdm"
-    "ly" "greetd" "emptty" "lemurs" "console-tdm"
-)
-
+KNOWN_DMS=("gdm" "sddm" "lightdm" "lxdm" "slim" "xorg-xdm" "ly" "greetd" "emptty" "lemurs" "console-tdm")
 SKIP_AUTOLOGIN=false
 DM_FOUND=""
 
-# Check via pacman -Q
 for dm in "${KNOWN_DMS[@]}"; do
     if pacman -Q "$dm" &>/dev/null; then
         DM_FOUND="$dm"
@@ -75,21 +70,14 @@ for dm in "${KNOWN_DMS[@]}"; do
 done
 
 if [ -n "$DM_FOUND" ]; then
-    # Case A: DM Installed -> Force Skip
     info_kv "Conflict" "${H_RED}$DM_FOUND${NC}" "Package detected"
     warn "To prevent conflicts, TTY auto-login will be DISABLED."
     SKIP_AUTOLOGIN=true
 else
-    # Case B: No DM -> Ask User (With Timeout)
     info_kv "DM Check" "None" "No Display Manager installed"
     echo ""
-    
-    # [NEW] Timeout 20s
     read -t 20 -p "$(echo -e "   ${H_CYAN}Enable TTY auto-login for Niri? [Y/n] (Default Y in 20s): ${NC}")" choice
-    
-    # Handle timeout newline issue
     if [ $? -ne 0 ]; then echo ""; fi
-    
     choice=${choice:-Y}
     
     if [[ ! "$choice" =~ ^[Yy]$ ]]; then
@@ -106,12 +94,10 @@ fi
 # ------------------------------------------------------------------------------
 section "Step 1/9" "Core Components"
 
-# Core Packages
 log "Installing Niri & Essentials..."
 PKGS="niri xwayland-satellite xdg-desktop-portal-gnome fuzzel kitty firefox libnotify mako polkit-gnome pciutils"
 exe pacman -Syu --noconfirm --needed $PKGS
 
-# Firefox Policy
 log "Configuring Firefox Policies..."
 FIREFOX_POLICY_DIR="/etc/firefox/policies"
 exe mkdir -p "$FIREFOX_POLICY_DIR"
@@ -136,7 +122,6 @@ success "Firefox policy applied."
 # 1.1 Configure XDG Portals
 # ------------------------------------------------------------------------------
 log "Configuring XDG Desktop Portals..."
-
 PORTAL_CONF_DIR="$HOME_DIR/.config/xdg-desktop-portal"
 exe runuser -u "$TARGET_USER" -- mkdir -p "$PORTAL_CONF_DIR"
 PORTAL_CONF="$PORTAL_CONF_DIR/niri-portals.conf"
@@ -153,7 +138,7 @@ exe chown "$TARGET_USER:$TARGET_USER" "$PORTAL_CONF"
 success "Portal priority configured."
 
 # ------------------------------------------------------------------------------
-# 2. File Manager (Nautilus) Setup
+# 2. File Manager
 # ------------------------------------------------------------------------------
 section "Step 2/9" "File Manager & GPU"
 
@@ -163,20 +148,16 @@ if [ ! -f /usr/bin/gnome-terminal ] || [ -L /usr/bin/gnome-terminal ]; then
     exe ln -sf /usr/bin/kitty /usr/bin/gnome-terminal
 fi
 
-# Smart GPU Env
 DESKTOP_FILE="/usr/share/applications/org.gnome.Nautilus.desktop"
 if [ -f "$DESKTOP_FILE" ]; then
     log "Checking GPU configuration..."
-    
     GPU_COUNT=$(lspci | grep -E -i "vga|3d" | wc -l)
     HAS_NVIDIA=$(lspci | grep -E -i "nvidia" | wc -l)
-    
     ENV_VARS="env GTK_IM_MODULE=fcitx"
     if [ "$GPU_COUNT" -gt 1 ] && [ "$HAS_NVIDIA" -gt 0 ]; then
         info_kv "GPU" "Hybrid Nvidia" "-> GSK_RENDERER=gl"
         ENV_VARS="env GSK_RENDERER=gl GTK_IM_MODULE=fcitx"
     fi
-    
     exe sed -i "s/^Exec=/Exec=$ENV_VARS /" "$DESKTOP_FILE"
 fi
 
@@ -192,28 +173,23 @@ IS_CN_ENV=false
 if [ "$CN_MIRROR" == "1" ] || [ "$DEBUG" == "1" ]; then
     IS_CN_ENV=true
     if [ "$DEBUG" == "1" ]; then warn "DEBUG MODE ACTIVE"; fi
-    
     log "Enabling China Optimizations..."
     exe flatpak remote-modify flathub --url=https://mirrors.ustc.edu.cn/flathub
-    
     export GOPROXY=https://goproxy.cn,direct
-    if ! grep -q "GOPROXY" /etc/environment; then
-        echo "GOPROXY=https://goproxy.cn,direct" >> /etc/environment
-    fi
-    
-    log "Enabling Git Mirror..."
+    if ! grep -q "GOPROXY" /etc/environment; then echo "GOPROXY=https://goproxy.cn,direct" >> /etc/environment; fi
     exe runuser -u "$TARGET_USER" -- git config --global url."https://gitclone.com/github.com/".insteadOf "https://github.com/"
+    success "Optimizations Enabled."
 else
     log "Using Global Sources."
 fi
 
-# NOPASSWD
+log "Configuring temporary sudo access..."
 SUDO_TEMP_FILE="/etc/sudoers.d/99_shorin_installer_temp"
 echo "$TARGET_USER ALL=(ALL) NOPASSWD: ALL" > "$SUDO_TEMP_FILE"
 chmod 440 "$SUDO_TEMP_FILE"
 
 # ------------------------------------------------------------------------------
-# 4. Install Dependencies
+# 4. Dependencies
 # ------------------------------------------------------------------------------
 section "Step 4/9" "Installing Dependencies"
 
@@ -221,13 +197,18 @@ LIST_FILE="$PARENT_DIR/niri-applist.txt"
 FAILED_PACKAGES=()
 
 if [ -f "$LIST_FILE" ]; then
-    mapfile -t PACKAGE_ARRAY < <(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | tr -d '\r')
+    # Read lines into array
+    mapfile -t PACKAGE_ARRAY < <(grep -vE "^\s*#|^\s*$" "$LIST_FILE")
     
     if [ ${#PACKAGE_ARRAY[@]} -gt 0 ]; then
         BATCH_LIST=""
         GIT_LIST=()
 
         for pkg in "${PACKAGE_ARRAY[@]}"; do
+            # Clean whitespace/newlines thoroughly
+            pkg=$(echo "$pkg" | tr -d '\r' | xargs)
+            [ -z "$pkg" ] && continue
+            
             [ "$pkg" == "imagemagic" ] && pkg="imagemagick"
             
             if [[ "$pkg" == *"-git" ]]; then
@@ -240,10 +221,10 @@ if [ -f "$LIST_FILE" ]; then
         # --- Phase 1: Batch Install ---
         if [ -n "$BATCH_LIST" ]; then
             log "Phase 1: Batch Install..."
-            
             if ! exe runuser -u "$TARGET_USER" -- env GOPROXY=$GOPROXY yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None $BATCH_LIST; then
                 warn "Batch failed. Retrying with Mirror Toggle..."
                 
+                # Toggle Mirror
                 if runuser -u "$TARGET_USER" -- git config --global --get url."https://gitclone.com/github.com/".insteadOf > /dev/null; then
                     runuser -u "$TARGET_USER" -- git config --global --unset url."https://gitclone.com/github.com/".insteadOf
                 else
@@ -265,6 +246,7 @@ if [ -f "$LIST_FILE" ]; then
                 if ! exe runuser -u "$TARGET_USER" -- env GOPROXY=$GOPROXY yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None "$git_pkg"; then
                     warn "Install failed. Retrying..."
                     
+                    # Toggle Mirror
                     if runuser -u "$TARGET_USER" -- git config --global --get url."https://gitclone.com/github.com/".insteadOf > /dev/null; then
                         runuser -u "$TARGET_USER" -- git config --global --unset url."https://gitclone.com/github.com/".insteadOf
                     else
@@ -291,7 +273,6 @@ if [ -f "$LIST_FILE" ]; then
         
         # --- Recovery Checks ---
         log "Verifying critical components..."
-        
         if ! command -v waybar &> /dev/null; then
             warn "Waybar missing. Installing stock..."
             exe pacman -Syu --noconfirm --needed waybar
@@ -318,7 +299,6 @@ fi
 # 5. Dotfiles
 # ------------------------------------------------------------------------------
 section "Step 5/9" "Deploying Dotfiles"
-
 REPO_URL="https://github.com/SHORiN-KiWATA/ShorinArchExperience-ArchlinuxGuide.git"
 TEMP_DIR="/tmp/shorin-repo"
 rm -rf "$TEMP_DIR"
@@ -384,31 +364,26 @@ rm -rf "$TEMP_DIR"
 # 7. Hardware Tools
 # ------------------------------------------------------------------------------
 section "Step 7/9" "Hardware Tools"
-
 exe runuser -u "$TARGET_USER" -- yay -Syu --noconfirm --needed ddcutil-service
 gpasswd -a "$TARGET_USER" i2c
 
 exe pacman -Syu --noconfirm --needed swayosd
 systemctl enable --now swayosd-libinput-backend.service > /dev/null 2>&1
-
 success "Hardware tools configured."
 
 # ------------------------------------------------------------------------------
 # Cleanup
 # ------------------------------------------------------------------------------
 section "Step 9/9" "Cleanup"
-
 rm -f "$SUDO_TEMP_FILE"
 runuser -u "$TARGET_USER" -- git config --global --unset url."https://gitclone.com/github.com/".insteadOf
 sed -i '/GOPROXY=https:\/\/goproxy.cn,direct/d' /etc/environment
-
 success "Cleanup done."
 
 # ------------------------------------------------------------------------------
 # 10. Auto-Login
 # ------------------------------------------------------------------------------
 section "Final" "Boot Config"
-
 USER_SYSTEMD_DIR="$HOME_DIR/.config/systemd/user"
 WANTS_DIR="$USER_SYSTEMD_DIR/default.target.wants"
 LINK_PATH="$WANTS_DIR/niri-autostart.service"
@@ -416,17 +391,13 @@ SERVICE_FILE="$USER_SYSTEMD_DIR/niri-autostart.service"
 
 if [ "$SKIP_AUTOLOGIN" = true ]; then
     log "Auto-login skipped (Reason: $DM_FOUND or User Opt-out)."
-    
-    # [CLEANUP] Remove any existing hijack configs
     if [ -f "$LINK_PATH" ] || [ -f "$SERVICE_FILE" ]; then
-        warn "Removing old auto-login services to prevent session hijacking..."
+        warn "Cleaning up old auto-login files..."
         exe rm -f "$LINK_PATH"
         exe rm -f "$SERVICE_FILE"
-        success "Cleanup successful."
     fi
 else
     log "Configuring TTY Auto-login..."
-    
     GETTY_DIR="/etc/systemd/system/getty@tty1.service.d"
     mkdir -p "$GETTY_DIR"
     cat <<EOT > "$GETTY_DIR/autologin.conf"
@@ -434,7 +405,6 @@ else
 ExecStart=
 ExecStart=-/sbin/agetty --noreset --noclear --autologin $TARGET_USER - \${TERM}
 EOT
-
     exe mkdir -p "$USER_SYSTEMD_DIR"
     cat <<EOT > "$SERVICE_FILE"
 [Unit]
@@ -448,10 +418,8 @@ Restart=on-failure
 [Install]
 WantedBy=default.target
 EOT
-
     exe mkdir -p "$WANTS_DIR"
     exe ln -sf "../niri-autostart.service" "$LINK_PATH"
-    
     exe chown -R "$TARGET_USER:$TARGET_USER" "$HOME_DIR/.config/systemd"
     success "Auto-login configured."
 fi
