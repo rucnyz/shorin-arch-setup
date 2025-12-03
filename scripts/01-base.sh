@@ -64,8 +64,8 @@ fi
 # ------------------------------------------------------------------------------
 section "Step 3/5" "Base Fonts"
 
-log "Installing wqy-zenhei, noto-fonts, emoji..."
-exe pacman -Syu --noconfirm --needed wqy-zenhei noto-fonts noto-fonts-emoji
+log "Installing noto-fonts-cjk, noto-fonts, emoji..."
+exe pacman -Syu --noconfirm --needed noto-fonts-cjk noto-fonts noto-fonts-emoji
 success "Base fonts installed."
 
 # ------------------------------------------------------------------------------
