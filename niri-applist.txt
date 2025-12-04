@@ -42,3 +42,4 @@ neovim
 python-pywalfox
 qt6ct
 qt5ct
+nwg-look
