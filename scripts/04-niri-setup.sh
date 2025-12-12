@@ -16,6 +16,12 @@ UNDO_SCRIPT="$SCRIPT_DIR/niri-undochange.sh"
 
 check_root
 
+# Ensure whiptail is installed for TUI
+if ! command -v whiptail &> /dev/null; then
+    log "Installing dependency: whiptail (libnewt)..."
+    pacman -S --noconfirm libnewt >/dev/null 2>&1
+fi
+
 section "Phase 4" "Niri Desktop Environment"
 
 # ==============================================================================
@@ -193,7 +199,7 @@ echo "$TARGET_USER ALL=(ALL) NOPASSWD: ALL" > "$SUDO_TEMP_FILE"
 chmod 440 "$SUDO_TEMP_FILE"
 
 # ==============================================================================
-# STEP 5: Dependencies (Interactive Recovery)
+# STEP 5: Dependencies (Interactive Recovery & TUI Selection)
 # ==============================================================================
 section "Step 4/9" "Dependencies"
 LIST_FILE="$PARENT_DIR/niri-applist.txt"
@@ -205,19 +211,83 @@ verify_installation() {
 }
 
 if [ -f "$LIST_FILE" ]; then
-    mapfile -t PACKAGE_ARRAY < <(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | tr -d '\r')
+    log "Parsing application list for TUI Selection..."
+    
+    # -------------------------------------------------------------
+    # TUI Selection Logic
+    # -------------------------------------------------------------
+    MENU_ARGS=()
+    
+    # Read file line by line to build TUI args
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line=$(echo "$line" | tr -d '\r' | xargs)
+        [[ -z "$line" || "$line" =~ ^# ]] && continue
+        
+        # Parse "Package # Description" or just "Package"
+        if [[ "$line" == *"#"* ]]; then
+            pkg_name="${line%%#*}"    # Left of #
+            pkg_desc="${line#*#}"     # Right of #
+        else
+            pkg_name="$line"
+            pkg_desc="Niri Component"
+        fi
+        
+        # Trim whitespace
+        pkg_name=$(echo "$pkg_name" | xargs)
+        pkg_desc=$(echo "$pkg_desc" | xargs)
+        
+        # Check install status for better UX
+        if pacman -Qi "$pkg_name" &>/dev/null; then
+            MENU_ARGS+=("$pkg_name" "[Installed] $pkg_desc" "ON")
+        else
+            MENU_ARGS+=("$pkg_name" "$pkg_desc" "ON")
+        fi
+    done < "$LIST_FILE"
+
+    if [ ${#MENU_ARGS[@]} -eq 0 ]; then
+        warn "App list is empty or invalid."
+        PACKAGE_ARRAY=()
+    else
+        # Show Whiptail Menu
+        # Redirect output to file descriptor 3 to capture selection, while showing TUI on stderr
+        SELECTION_STR=$(whiptail --title "Niri Package Selection" \
+                                 --checklist "Select packages to install (Space to toggle, Enter to confirm):" \
+                                 22 90 12 \
+                                 "${MENU_ARGS[@]}" \
+                                 3>&1 1>&2 2>&3)
+        
+        # Check if user cancelled
+        if [ $? -ne 0 ]; then
+            warn "User cancelled package selection. Skipping dependency installation."
+            PACKAGE_ARRAY=()
+        else
+            # Eval the string (e.g., "pkg1" "pkg2") into an array
+            eval "PACKAGE_ARRAY=($SELECTION_STR)"
+        fi
+    fi
+    # -------------------------------------------------------------
+    # End TUI Logic
+    # -------------------------------------------------------------
+
     
     if [ ${#PACKAGE_ARRAY[@]} -gt 0 ]; then
         BATCH_LIST=()
         AUR_LIST=()
 
-        # 1. Parse List & Separate
+        info_kv "Selection" "${#PACKAGE_ARRAY[@]} packages scheduled."
+
+        # 1. Parse List & Separate (Now using user selection)
         for pkg in "${PACKAGE_ARRAY[@]}"; do
             [ "$pkg" == "imagemagic" ] && pkg="imagemagick"
+            
+            # Remove "AUR:" prefix if present in the selection, though TUI usually strips it visually
+            # If your text file has "AUR:yay", handle it:
             if [[ "$pkg" == "AUR:"* ]]; then
                 clean_pkg="${pkg#AUR:}"
                 AUR_LIST+=("$clean_pkg")
             else
+                # Also check blindly if we missed the AUR prefix but it IS an AUR pkg?
+                # For safety, stick to list definition or treat everything else as Repo
                 BATCH_LIST+=("$pkg")
             fi
         done
@@ -301,6 +371,8 @@ if [ -f "$LIST_FILE" ]; then
             exe pacman -Syu --noconfirm --needed waybar
         fi
 
+    else
+        warn "No packages selected to install."
     fi
 else
     warn "niri-applist.txt not found."
