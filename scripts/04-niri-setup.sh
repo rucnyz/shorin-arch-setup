@@ -405,6 +405,7 @@ if [ -d "$TEMP_DIR/dotfiles" ]; then
     as_user flatpak override --user --filesystem="$HOME_DIR/.themes"
     as_user flatpak override --user --filesystem=xdg-config/gtk-4.0
     as_user flatpak override --user --env=GTK_THEME=adw-gtk3-dark
+    as_user flatpak override --user --filesystem=xdg-config/fontconfig
   fi
   success "Dotfiles Applied."
 else
