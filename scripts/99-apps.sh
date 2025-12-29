@@ -264,7 +264,7 @@ if pacman -Qi virt-manager &>/dev/null; then
   
   # 1. 安装完整依赖
   log "Installing QEMU/KVM dependencies..."
-  pacman -S --noconfirm --needed qemu-full virt-manager swtpm dnsmasq iptables-nft
+  pacman -S --noconfirm --needed qemu-full virt-manager swtpm dnsmasq
 
   # 2. 添加用户组 (需要重新登录生效)
   log "Adding $TARGET_USER to libvirt group..."
