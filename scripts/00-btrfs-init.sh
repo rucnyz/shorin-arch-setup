@@ -110,7 +110,7 @@ if snapper list-configs | grep -q "^root "; then
         log "Root snapshot '$SNAPSHOT_DESC' already exists. Skipping creation."
     else
         log "Creating Root snapshot..."
-        if exe snapper -c root create --description "$SNAPSHOT_DESC" --cleanup-algorithm number; then
+        if exe snapper -c root create --description "$SNAPSHOT_DESC"; then
             success "Root snapshot created."
         else
             error "Failed to create Root snapshot."
@@ -127,7 +127,7 @@ if snapper list-configs | grep -q "^home "; then
         log "Home snapshot '$SNAPSHOT_DESC' already exists. Skipping creation."
     else
         log "Creating Home snapshot..."
-        if exe snapper -c home create --description "$SNAPSHOT_DESC" --cleanup-algorithm number; then
+        if exe snapper -c home create --description "$SNAPSHOT_DESC"; then
             success "Home snapshot created."
         else
             error "Failed to create Home snapshot."
