@@ -35,6 +35,7 @@ virt-manager                             # GUi for KVM qemu virtula machine
 AUR:linuxqq-appimage                     # Tencent QQ (AppImage)
 AUR:wechat-appimage                      # WeChat (AppImage)
 AUR:typora-free                          # markdown editor
+AUR:lsfg-vk-bin                          # yellow duck frame generator
 # --- Flatpak Packages (Prefix with flatpak:) ---
 flatpak:it.mijorus.gearlever                     # AppImage Manager (Integrates AppImages)
 flatpak:com.obsproject.Studio            # OBS Studio (Streaming & Recording)
