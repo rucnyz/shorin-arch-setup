@@ -215,9 +215,19 @@ else
     error "$GRUB_CONF not found."
     exit 1
 fi
-
 # ------------------------------------------------------------------------------
-# 5. Apply Changes
+# 5. Add Shutdown/Reboot Menu Entries
+# ------------------------------------------------------------------------------
+log "Adding Power Options to GRUB menu..."
+
+cp /etc/grub.d/40_custom /etc/grub.d/99_custom
+echo 'menuentry "Reboot"' {reboot} >> /etc/grub.d/99_custom
+echo 'menuentry "Shutdown"' {halt} >> /etc/grub.d/99_custom
+
+# 赋予执行权限
+success "Added grub menuentry 99-shutdown"
+# ------------------------------------------------------------------------------
+# 6. Apply Changes
 # ------------------------------------------------------------------------------
 log "Generating new GRUB configuration..."
 
