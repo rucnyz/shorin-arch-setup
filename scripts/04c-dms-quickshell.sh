@@ -105,7 +105,7 @@ StartLimitBurst=3
 ExecStart=/usr/bin/niri-session
 Restart=on-failure
 RestartSec=2
-ExecStartPost=/usr/bin/sleep 0.3
+ExecStartPost=/usr/bin/sleep 0.5
 ExecStartPost=/usr/bin/bash -c "dms run & disown" 
 Environment=XDG_CURRENT_DESKTOP=niri
 Environment=XDG_SESSION_TYPE=wayland
@@ -133,7 +133,7 @@ StartLimitBurst=3
 ExecStart=/usr/bin/start-hyprland
 Restart=on-failure
 RestartSec=2
-ExecStartPost=/usr/bin/sleep 0.3
+ExecStartPost=/usr/bin/sleep 0.6
 ExecStartPost=/usr/bin/bash -c "dms run & disown" 
 Environment=XDG_CURRENT_DESKTOP=hyprland
 Environment=XDG_SESSION_TYPE=wayland
