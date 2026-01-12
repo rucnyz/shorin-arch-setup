@@ -62,7 +62,7 @@ if exe as_user yay -S --noconfirm --needed --answerdiff=None --answerclean=None 
 
         exe pacman -S --noconfirm --needed ffmpegthumbnailer gvfs-smb nautilus-open-any-terminal file-roller gnome-keyring gst-plugins-base gst-plugins-good gst-libav nautilus
         log "Packages installed successfully."
-        
+
 else
         log "Installation failed."
         return 1
@@ -216,7 +216,6 @@ EXTENSION_LIST=(
     "clipboard-indicator@tudmotu.com"
     "color-picker@tuberry"
     "desktop-cube@schneegans.github.com"
-    "ding@rastersoft.com"
     "fuzzy-application-search@mkhl.codeberg.page"
     "lockkeys@vaina.lt"
     "middleclickclose@paolo.tranquilli.gmail.com"
@@ -263,7 +262,6 @@ sudo -u "$TARGET_USER" bash <<EOF
     enable_extension "clipboard-indicator@tudmotu.com"
     enable_extension "color-picker@tuberry"
     enable_extension "desktop-cube@schneegans.github.com"
-    enable_extension "ding@rastersoft.com"
     enable_extension "fuzzy-application-search@mkhl.codeberg.page"
     enable_extension "lockkeys@vaina.lt"
     enable_extension "middleclickclose@paolo.tranquilli.gmail.com"
