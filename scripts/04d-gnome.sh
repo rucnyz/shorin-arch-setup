@@ -59,8 +59,8 @@ exe systemctl enable gdm
 #=================================================
 section "Step 2" "Set default terminal"
 log "set gnome default terminal..."
-exe as_user dbus-run-session gsettings set org.gnome.desktop.default-applications.terminal exec 'ghostty'
-exe as_user dbus-run-session gsettings set org.gnome.desktop.default-applications.terminal exec-arg '-e'
+exe as_user gsettings set org.gnome.desktop.default-applications.terminal exec 'ghostty'
+exe as_user gsettings set org.gnome.desktop.default-applications.terminal exec-arg '-e'
 
 #=================================================
 # locale
@@ -83,9 +83,9 @@ EOF
 section "Step 4" "Configure Shortcuts"
 log "Configuring shortcuts.."
 GNOME_KEY_DIR="$SCRIPT_DIR/gnome-dotfiles/keybinds"
-cat "$GNOME_KEY_DIR/org.gnome.desktop.wm.keybindings.conf" | dbus-run-session dconf load /org/gnome/desktop/wm/keybindings/
-cat "$GNOME_KEY_DIR/org.gnome.settings-daemon.plugins.media-keys.conf" | dconf load /org/gnome/settings-daemon/plugins/media-keys/
-cat "$GNOME_KEY_DIR/org.gnome.shell.keybindings.conf" | dbus-run-session dconf load /org/gnome/shell/keybindings/
+cat "$GNOME_KEY_DIR/org.gnome.desktop.wm.keybindings.conf" | as_user dbus-run-session dconf load /org/gnome/desktop/wm/keybindings/
+cat "$GNOME_KEY_DIR/org.gnome.settings-daemon.plugins.media-keys.conf" | as_user dconf load /org/gnome/settings-daemon/plugins/media-keys/
+cat "$GNOME_KEY_DIR/org.gnome.shell.keybindings.conf" | as_user dbus-run-session dconf load /org/gnome/shell/keybindings/
 
 #=================================================
 # extensions
@@ -113,8 +113,8 @@ EXTENSION_LIST=(
     "kimpanel@kde.org"
 )
 log "Downloading extensions..."
-dbus-run-session gnome-extensions-cli install ${EXTENSION_LIST[@]}
-dbus-run-session gnome-extensions-cli enable ${EXTENSION_LIST[@]}
+as_user dbus-run-session gnome-extensions-cli install ${EXTENSION_LIST[@]}
+as_user dbus-run-session gnome-extensions-cli enable ${EXTENSION_LIST[@]}
 
 
 # === firefox inte ===
