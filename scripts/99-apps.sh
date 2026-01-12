@@ -331,12 +331,12 @@ if pacman -Qi virt-manager &>/dev/null; then
 fi
 
 # --- [NEW] Wine Configuration & Fonts ---
-if pacman -Qi wine &>/dev/null; then
+if command -v wine &>/dev/null; then
   info_kv "Config" "Wine detected"
   
   # 1. 安装 Gecko 和 Mono
   log "Ensuring Wine Gecko/Mono are installed..."
-  pacman -S --noconfirm --needed wine wine-gecko wine-mono
+  pacman -S --noconfirm --needed wine wine-gecko wine-mono 
 
   # 2. 初始化 Wine (使用 wineboot -u 在后台运行，不弹窗)
   WINE_PREFIX="$HOME_DIR/.wine"
@@ -385,6 +385,10 @@ if pacman -Qi wine &>/dev/null; then
     warn "Resources font directory not found at: $FONT_SRC"
   fi
 fi
+
+if command -v lutris; then 
+
+    pacman -S --noconfirm --needed alsa-plugins giflib glfw gst-plugins-base-libs lib32-alsa-plugins lib32-giflib lib32-gst-plugins-base-libs lib32-gtk3 lib32-libjpeg-turbo lib32-libva lib32-mpg123  lib32-openal libjpeg-turbo libva libxslt mpg123 openal ttf-liberation
 
 # --- Steam Locale Fix ---
 STEAM_desktop_modified=false

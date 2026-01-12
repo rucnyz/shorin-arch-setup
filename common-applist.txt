@@ -6,6 +6,7 @@ virt-manager                             # KVM qemu virtula machine
 # --- Gaming & Media ---
 steam                                    # Gaming Platform (Valve)
 lutris                                   # Gaming outside steam
+heroic-games-launcher-bin                # Playing Epic games
 mpv                                      # Minimalist High Performance Video Player
 fragments                                # BitTorrent Client (GNOME style)
 mangohud                                 # OSD tool for gaming (like msi afterburner)
