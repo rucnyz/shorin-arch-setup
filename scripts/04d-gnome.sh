@@ -43,7 +43,7 @@ trap cleanup_sudo EXIT INT TERM
 #=================================================
 section "Step 1" "Install base pkgs"
 log "Installing GNOME ..."
-if exe as_user yay -S --noconfirm --needed --answerdiff=None --answerclean=None gnome-desktop gnome-backgrounds gnome-tweaks gdm ghostty gnome-control-center gnome-software flatpak file-roller nautilus-python firefox nm-connection-editor dnsmasq; then
+if exe as_user yay -S --noconfirm --needed --answerdiff=None --answerclean=None gnome-desktop gnome-backgrounds gnome-tweaks gdm ghostty gnome-control-center gnome-software flatpak file-roller nautilus-python firefox nm-connection-editor pacman-contrib dnsmasq; then
         log "PKGS intsalled "
 else
         log "Installation failed."
