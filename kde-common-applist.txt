@@ -5,7 +5,6 @@ kcalc                                    # Calculator (KDE Native)
 ksystemlog                               # System Log Viewer
 pacman-contrib                           # Pacman utilities (paccache, checkupdates)
 btop                                     # Resource Monitor (TUI)
-gearlever                                # AppImage Manager (Integrate AppImages to menu)
 lact                                     # GPU Control Panel (Overclocking/Fan control)
 upscaler                                 # # AI Image Upscaler (Enhance low-res images)
 curtail                                  # Image Compressor (Reduce PNG/JPG size)
@@ -31,6 +30,7 @@ AUR:wechat-appimage                      # WeChat (AppImage)
 AUR:ttf-jetbrains-maple-mono-nf-xx-xx    # Maple Mono NF font
 
 # --- Flatpak Packages (Productivity & Media) ---
+flatpak:it.mijorus.gearlever             # AppImage Manager (Integrates AppImages)
 flatpak:com.obsproject.Studio            # OBS Studio (Streaming & Recording)
 flatpak:com.github.wwmm.easyeffects      # Audio Effects for PipeWire (Equalizer/Noise reduction)
 flatpak:com.github.unrud.VideoDownloader # Video Downloader (YouTube/Bilibili)
