@@ -464,6 +464,7 @@ hide_desktop_file "/usr/share/applications/nvim.desktop"
 hide_desktop_file "/usr/share/applications/nvtop.desktop"
 hide_desktop_file "/usr/share/applications/mpv.desktop"
 hide_desktop_file "/usr/share/applications/org.gnome.Settings.desktop"
+
 # --- Post-Dotfiles Configuration: Firefox ---
 # Define resource path (shorin-arch-setup/resources/firefox/user.js.snippet)
 FF_SNIPPET="$PARENT_DIR/resources/firefox/user.js.snippet"

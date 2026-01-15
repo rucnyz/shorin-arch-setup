@@ -70,6 +70,10 @@ if [ "$GPU_COUNT" -ge 2 ]; then
 
     if [[ $HAS_NVIDIA == true ]]; then 
     PKGS+=("nvidia-prime" "switcheroo-control")
+        # fix gtk4 issue with nvidia dual gpu
+        if grep -q "GSK_RENDERER" "/etc/environment"; then
+            echo 'GSK_RENDERER=gl' >> /etc/environment
+        fi
     fi
 fi
 # ==============================================================================
