@@ -212,7 +212,7 @@ fi
 
 # --- B. Install AUR Apps (INDIVIDUAL MODE + RETRY) ---
 if [ ${#AUR_APPS[@]} -gt 0 ]; then
-    section "Step 2/3" "AUR Packages (Sequential + Retry)"
+    section "Step 2/3" "AUR Packages "
     
     for app in "${AUR_APPS[@]}"; do
         if pacman -Qi "$app" &>/dev/null; then
@@ -223,12 +223,11 @@ if [ ${#AUR_APPS[@]} -gt 0 ]; then
 
         log "Installing AUR: $app ..."
         install_success=false
-        max_retries=2
+        max_retries=1
         
         for (( i=0; i<=max_retries; i++ )); do
             if [ $i -gt 0 ]; then
-                warn "Retry $i/$max_retries for '$app' in 3 seconds..."
-                sleep 3
+                warn "Retry $i/$max_retries for '$app' ..."
             fi
             
             if as_user yay -Syu --noconfirm --needed --answerdiff=None --answerclean=None "$app"; then
@@ -310,23 +309,6 @@ if pacman -Qi virt-manager &>/dev/null; then
   virsh net-start default >/dev/null 2>&1 || warn "Default network might be already active."
   virsh net-autostart default >/dev/null 2>&1 || true
   
-  # 修复虚拟机安装后的dns问题
-    if systemd-detect-virt -q; then
-        log "Virtual Machine environment detected."
-        
-        # 1. 检测是否在中国 
-        if [[ $(readlink -f /etc/localtime) == *"Shanghai"* ]]; then
-            # 中国：只加国内 DNS
-            log "Region: China. Prepending DNS..."
-            echo "nameserver 223.5.5.5" >> /etc/resolv.conf
-            echo "nameserver 119.29.29.29" >> /etc/resolv.conf
-        else
-            # 非中国：加 Google DNS
-            log "Region: Global. Appending Google DNS..."
-            echo "nameserver 8.8.8.8" >> /etc/resolv.conf
-            echo "nameserver 1.1.1.1" >> /etc/resolv.conf
-        fi
-    fi
   success "Virtualization (KVM) configured."
 fi
 
