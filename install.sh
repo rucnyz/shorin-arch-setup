@@ -362,8 +362,6 @@ clean_intermediate_snapshots() {
     local IDS_TO_KEEP=()
     for marker in "${KEEP_MARKERS[@]}"; do
         local found_id
-        # [修正] 去掉了 grep -E "...$"，防止 Snapper 输出表格尾部的填充空格导致匹配失败
-        # grep -F 已经足够精确，且 tail -n 1 保证取最新的一个
         found_id=$(snapper -c "$config_name" list --columns number,description | grep -F "$marker" | awk '{print $1}' | tail -n 1)
         
         if [ -n "$found_id" ]; then
@@ -379,13 +377,15 @@ clean_intermediate_snapshots() {
         local id
         local type
         
+        # Snapper 表格输出通常为: " 100 | pre    | ..."
+        # awk $1=number, $2=|, $3=type
         id=$(echo "$line" | awk '{print $1}')
         type=$(echo "$line" | awk '{print $3}')
 
         if [[ "$id" =~ ^[0-9]+$ ]]; then
             if [ "$id" -gt "$start_id" ]; then
                 
-                # --- 白名单检查 (原生循环比对，最稳健) ---
+                # --- 白名单检查 ---
                 local skip=false
                 for keep in "${IDS_TO_KEEP[@]}"; do
                     if [[ "$id" == "$keep" ]]; then
@@ -397,10 +397,11 @@ clean_intermediate_snapshots() {
                 if [ "$skip" = true ]; then
                     continue
                 fi
-                # ------------------------------------
+                # -----------------
 
-                # 仅删除 pre/post/single 类型的快照
-                if [[ "$type" == "pre" || "$type" == "post" || "$type" == "single" ]]; then
+                # [修改重点] 仅删除 pre 和 post 类型的快照
+                # 去掉了 || "$type" == "single" 以保护用户手动创建的快照
+                if [[ "$type" == "pre" || "$type" == "post" ]]; then
                     snapshots_to_delete+=("$id")
                 fi
             fi
