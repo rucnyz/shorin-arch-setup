@@ -126,7 +126,7 @@ if [ -f "$HYPR_CONFIG" ]; then
     LOCALE_AVAILABLE=$(locale -a)
     if echo "$LOCALE_AVAILABLE" | grep -q "zh_CN.utf8" && ! grep -q "zh_CN" "$HYPR_CONFIG"; then
         log "Chinese locale detected. Configuring Hyprland environment..."
-        echo "env = LANG=zh_CN.UTF-8" >> "$HYPR_CONFIG"
+        echo "env = LANG, zh_CN.UTF-8" >> "$HYPR_CONFIG"
     fi
 else
     warn "Hyprland config file not found: $HYPR_CONFIG"
