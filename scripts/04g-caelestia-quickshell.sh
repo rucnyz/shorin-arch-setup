@@ -135,6 +135,17 @@ fi
 success "Post-configuration completed."
 
 # ==============================================================================
+#  file manager
+# ==============================================================================
+section "config" "file manager"
+
+if ! command -v thunar; then
+
+exe pacman -S --needed --noconfirm thunar tumbler ffmpegthumbnailer poppler-glib gvfs-smb file-roller thunar-archive-plugin gnome-keyring
+
+fi
+
+# ==============================================================================
 #  6. Autostart & Autologin
 # ==============================================================================
 section "Config" "Systemd Autostart Setup"
