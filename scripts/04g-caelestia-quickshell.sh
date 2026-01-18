@@ -117,7 +117,7 @@ if [ -f "$HYPR_CONFIG" ]; then
         log "Injecting Fcitx5 config into Hyprland..."
         echo "exec-once = fcitx5 -d" >> "$HYPR_CONFIG"
         echo "env = LC_CTYPE, en_US.UTF-8" >> "$HYPR_CONFIG"
-        cp $PARENT_DIR/quickshell-dotfiles/fcitx5 $HOME_DIR/.config/
+        cp -rf $PARENT_DIR/quickshell-dotfiles/fcitx5 $HOME_DIR/.config/
         chown -R $TARGET_USER $HOME_DIR/.config/fcitx5
     fi
 
