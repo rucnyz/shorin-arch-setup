@@ -393,7 +393,7 @@ prepare_repository() {
     
     as_user git -C "$DOTFILES_REPO" init
     # 强制将本地分支名设为 main，避免本地是 master 远程是 main 造成的混乱
-    as_user git -C "$DOTFILES_REPO" branch -M "$BRANCH_NAME"  # <--- 新增：确保本地分支名一致
+    as_user git -C "$DOTFILES_REPO" branch -m "$BRANCH_NAME"  # <--- 新增：确保本地分支名一致
     
     as_user git -C "$DOTFILES_REPO" config core.sparseCheckout true
     local sparse_file="$DOTFILES_REPO/.git/info/sparse-checkout"
@@ -407,8 +407,6 @@ prepare_repository() {
     # 修复点 2：同样明确指定 origin main
     if ! as_user git -C "$DOTFILES_REPO" pull origin "$BRANCH_NAME" --depth 1; then # <--- 修改
       critical_failure_handler "Failed to download dotfiles (Sparse+Shallow failed)."
-    else
-      as_user git -C "$DOTFILES_REPO" branch --set-upstream-to=origin/main main
     fi
 
   fi
