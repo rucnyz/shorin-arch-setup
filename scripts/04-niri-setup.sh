@@ -294,21 +294,74 @@ else
 fi
 
 # ==============================================================================
-# STEP 6: Dotfiles (Linked via Symlinks)
+# STEP 6: Dotfiles (Smart Recursive Symlink)
 # ==============================================================================
 section "Step 5/9" "Deploying Dotfiles"
 
-# 1. 定义新的持久化仓库路径
 REPO_GITHUB="https://github.com/SHORiN-KiWATA/ShorinArchExperience-ArchlinuxGuide.git"
 REPO_GITEE="https://gitee.com/shorinkiwata/ShorinArchExperience-ArchlinuxGuide.git"
-# 修改：不再使用 /tmp，而是放到用户的 .local/share 下
+
+# 1. 仓库位置：放在 .local/share 下，不污染 home 根目录
 DOTFILES_REPO="$HOME_DIR/.local/share/shorin-niri"
 
-# 2. Git Clone 或 Pull 处理函数
+# --- Smart Linking Function ---
+# 核心逻辑：只链接“叶子”节点，对于“容器”目录（.config, .local, share）则递归进入
+link_recursive() {
+  local src_dir="$1"
+  local dest_dir="$2"
+  local exclude_list="$3"
+
+  # 确保目标容器目录存在 (比如确保 ~/.local/share 存在)
+  as_user mkdir -p "$dest_dir"
+
+  find "$src_dir" -mindepth 1 -maxdepth 1 -not -path '*/.git*' | while read -r src_path; do
+    local item_name
+    item_name=$(basename "$src_path")
+
+    # 0. 排除检查
+    if echo "$exclude_list" | grep -qw "$item_name"; then
+      log "Skipping excluded: $item_name"
+      continue
+    fi
+
+    # 1. 判断是否是需要“穿透”的系统目录
+    # 规则：如果遇到 .config, .local，或者 .local 下面的 share/bin，不要链接，而是递归
+    local need_recurse=false
+
+    if [ "$item_name" == ".config" ]; then
+        need_recurse=true
+    elif [ "$item_name" == ".local" ]; then
+        need_recurse=true
+    # 只有当父目录名字是以 .local 结尾时，才穿透 share 和 bin
+    elif [[ "$src_dir" == *".local" ]] && { [ "$item_name" == "share" ] || [ "$item_name" == "bin" ]; }; then
+        need_recurse=true
+    fi
+
+    if [ "$need_recurse" = true ]; then
+        # 递归进入：传入当前路径作为新的源和目标
+        link_recursive "$src_path" "$dest_dir/$item_name" "$exclude_list"
+    else
+        # 2. 具体的配置文件夹/文件（如 fcitx5, niri, .zshrc） -> 执行链接
+        local target_path="$dest_dir/$item_name"
+        
+        # 先清理旧的目标（无论是文件、文件夹还是死链）
+        if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+            as_user rm -rf "$target_path"
+        fi
+        
+        # 创建软链接
+        # 效果：~/.local/share/fcitx5 -> ~/.local/share/shorin-niri/dotfiles/.local/share/fcitx5
+        as_user ln -sf "$src_path" "$target_path"
+    fi
+  done
+}
+
+# --- Execution ---
+
+# 1. 准备仓库
 prepare_repository() {
   if [ -d "$DOTFILES_REPO/.git" ]; then
     log "Repository exists. Updating..."
-    # 尝试更新，如果失败则删除重下
     if ! as_user git -C "$DOTFILES_REPO" pull --ff-only; then
       warn "Update failed. Resetting repository..."
       rm -rf "$DOTFILES_REPO"
@@ -318,8 +371,10 @@ prepare_repository() {
     fi
   fi
 
-  # 如果目录不存在或已被删除，则进行克隆
   log "Cloning configuration to $DOTFILES_REPO..."
+  # 确保父目录存在
+  as_user mkdir -p "$(dirname "$DOTFILES_REPO")"
+  
   if ! as_user git clone "$REPO_GITHUB" "$DOTFILES_REPO"; then
     warn "GitHub failed. Trying Gitee..."
     rm -rf "$DOTFILES_REPO"
@@ -329,139 +384,57 @@ prepare_repository() {
   fi
 }
 
-# 3. 核心链接函数
-link_dotfiles() {
-  local src_root="$1"
-  local dest_root="$2"
-  local exclude_list="$3"
-
-  log "Linking files from $(basename "$src_root")..."
-
-  # 遍历源目录下的所有文件和文件夹（包含隐藏文件）
-  find "$src_root" -mindepth 1 -maxdepth 1 -not -path '*/.git*' | while read -r item; do
-    local item_name
-    item_name=$(basename "$item")
-
-    # 检查是否在排除列表中
-    if echo "$exclude_list" | grep -qw "$item_name"; then
-      log "Skipping excluded: $item_name"
-      continue
-    fi
-
-    # 特殊处理 .config 目录：不直接链接 .config 文件夹本身，而是链接其子目录
-    # 这样可以防止覆盖用户 .config 中其他不相关的软件配置
-    if [ "$item_name" == ".config" ]; then
-        as_user mkdir -p "$dest_root/.config"
-        # 递归调用处理 .config 内部
-        link_dotfiles "$item/.config" "$dest_root/.config" "$exclude_list"
-        continue
-    fi
-    
-    # 特殊处理 .local 目录：逻辑同上
-    if [ "$item_name" == ".local" ]; then
-        as_user mkdir -p "$dest_root/.local"
-        # 这里假设只处理 .local/bin 或 .local/share，简单起见递归链接内部
-        # 如果只想链接 .local/bin 下的脚本，可以写得更细，这里采用目录级链接
-        # 这里的实现方式是递归遍历 .local 下的一级目录（如 bin, share）
-        find "$item" -mindepth 1 -maxdepth 1 | while read -r local_sub; do
-             local sub_name=$(basename "$local_sub")
-             as_user mkdir -p "$dest_root/.local"
-             # 建立链接： 例如 .local/share/fonts -> ~/.local/share/fonts
-             local target="$dest_root/.local/$sub_name"
-             # 移除旧的目标（如果是文件夹则移除，如果是文件也移除）
-             [ -e "$target" ] || [ -L "$target" ] && as_user rm -rf "$target"
-             as_user ln -sf "$local_sub" "$target"
-        done
-        continue
-    fi
-
-    # 常规文件/文件夹链接逻辑
-    local target="$dest_root/$item_name"
-    
-    # 如果目标存在，先删除（备份已在外部完成）
-    if [ -e "$target" ] || [ -L "$target" ]; then
-      # 使用 rm -rf 确保无论是软链还是实体目录都被移除
-      as_user rm -rf "$target"
-    fi
-
-    # 创建软链接
-    as_user ln -sf "$item" "$target"
-    # echo "Linked: $item -> $target" # Debug output
-  done
-}
-
-# --- 执行流程 ---
-
 prepare_repository
 
+# 2. 执行链接
 if [ -d "$DOTFILES_REPO/dotfiles" ]; then
-  # 准备排除列表
   EXCLUDE_LIST=""
   if [ "$TARGET_USER" != "shorin" ]; then
     EXCLUDE_FILE="$PARENT_DIR/exclude-dotfiles.txt"
     if [ -f "$EXCLUDE_FILE" ]; then
       log "Loading exclusions..."
-      # 读取排除文件内容到变量，去除回车和注释
       EXCLUDE_LIST=$(grep -vE "^\s*#|^\s*$" "$EXCLUDE_FILE" | tr '\n' ' ')
     fi
   fi
 
-  # 备份现有配置
   log "Backing up existing configs..."
   as_user tar -czf "$HOME_DIR/config_backup_$(date +%s).tar.gz" -C "$HOME_DIR" .config
 
-  # 执行链接函数 (针对 .config 目录特殊处理逻辑在函数内)
-  # 注意：这里我们传入 repo/dotfiles 作为源，HOME 作为目标
-  # 函数会自动处理 .config 内部的子文件夹链接
-  
-  # 这里为了适配函数的递归逻辑，我们需要微调一下调用方式。
-  # 原始结构: dotfiles/.config/APP
-  # 我们遍历 dotfiles/*
-  
-  # 调用链接函数
-  link_dotfiles "$DOTFILES_REPO/dotfiles" "$HOME_DIR" "$EXCLUDE_LIST"
+  # 调用递归函数：从 dotfiles 根目录开始，目标是 HOME
+  link_recursive "$DOTFILES_REPO/dotfiles" "$HOME_DIR" "$EXCLUDE_LIST"
 
-  # --- Post-Process (修正与清理) ---
+  # --- Post-Process (防止污染 git 的修正) ---
   if [ "$TARGET_USER" != "shorin" ]; then
-    # 1. 处理 output.kdl
-    # 该文件会被 truncate 清空，为了不影响 Git 仓库，必须断开软链
+    # 修复 output.kdl (转为实体文件)
     OUTPUT_KDL="$HOME_DIR/.config/niri/output.kdl"
     if [ -L "$OUTPUT_KDL" ]; then
         as_user rm "$OUTPUT_KDL"
-        as_user touch "$OUTPUT_KDL" # 创建为空文件
+        as_user touch "$OUTPUT_KDL"
     else
         as_user truncate -s 0 "$OUTPUT_KDL" 2>/dev/null
     fi
     
-    # 2. 处理 Bookmarks
-    # 该文件会被 sed 修改，为了不污染 Git 仓库，必须断开软链并复制
+    # 修复 Bookmarks (转为实体文件并修改)
     BOOKMARKS_FILE="$HOME_DIR/.config/gtk-3.0/bookmarks"
     REPO_BOOKMARKS="$DOTFILES_REPO/dotfiles/.config/gtk-3.0/bookmarks"
-    
     if [ -L "$BOOKMARKS_FILE" ] || [ -f "$REPO_BOOKMARKS" ]; then
-        # 移除软链接
         [ -L "$BOOKMARKS_FILE" ] && as_user rm "$BOOKMARKS_FILE"
-        # 从仓库复制实体文件过来
         as_user cp "$REPO_BOOKMARKS" "$BOOKMARKS_FILE"
-        
-        # 执行替换操作
         as_user sed -i "s/shorin/$TARGET_USER/g" "$BOOKMARKS_FILE"
-        log "Updated GTK bookmarks (converted symlink to physical file)."
+        log "Updated GTK bookmarks."
     fi
   fi
 
-  # Fix Symlinks & Permissions (GTK Themes)
-  # 这些是内部相对链接，保持原样即可
+  # GTK Theme Symlinks (Fix internal links)
   GTK4="$HOME_DIR/.config/gtk-4.0"
   THEME="$HOME_DIR/.themes/adw-gtk3-dark/gtk-4.0"
-  
-  # 确保目录存在（如果是软链过来的，目录肯定存在）
   if [ -d "$GTK4" ]; then
       as_user rm -f "$GTK4/gtk.css" "$GTK4/gtk-dark.css"
       as_user ln -sf "$THEME/gtk-dark.css" "$GTK4/gtk-dark.css"
       as_user ln -sf "$THEME/gtk.css" "$GTK4/gtk.css"
   fi
-
+  
+  # Flatpak overrides
   if command -v flatpak &>/dev/null; then
     as_user flatpak override --user --filesystem="$HOME_DIR/.themes"
     as_user flatpak override --user --filesystem=xdg-config/gtk-4.0
@@ -475,25 +448,20 @@ else
 fi
 
 # ==============================================================================
-# STEP 7: Wallpapers & Templates
+# STEP 7: Wallpapers
 # ==============================================================================
 section "Step 6/9" "Wallpapers"
-# 修改：路径引用从 TEMP_DIR 改为 DOTFILES_REPO
+# 更新引用路径
 if [ -d "$DOTFILES_REPO/wallpapers" ]; then
   as_user mkdir -p "$HOME_DIR/Pictures/Wallpapers"
-  # 壁纸可以选择 cp (复制) 或 ln (链接)。通常复制比较好，防止误删仓库文件。
-  # 这里保留复制逻辑，源路径改变即可。
   as_user cp -rf "$DOTFILES_REPO/wallpapers/." "$HOME_DIR/Pictures/Wallpapers/"
   
   as_user mkdir -p "$HOME_DIR/Templates"
   as_user touch "$HOME_DIR/Templates/new"
-  as_user touch "$HOME_DIR/Templates/new.sh"
-  # 修正权限问题，追加写入最好确保文件归属
   echo "#!/bin/bash" | as_user tee "$HOME_DIR/Templates/new.sh" >/dev/null
   as_user chmod +x "$HOME_DIR/Templates/new.sh"
   success "Installed."
 fi
-
 # ==============================================================================
 # STEP 8: Hardware Tools
 # ==============================================================================
