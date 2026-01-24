@@ -490,8 +490,7 @@ fi
 section "Step 6/9" "Wallpapers"
 # 更新引用路径
 if [ -d "$DOTFILES_REPO/wallpapers" ]; then
-  as_user mkdir -p "$HOME_DIR/Pictures/Wallpapers"
-  as_user mv "$DOTFILES_REPO/wallpapers" "$HOME_DIR/Pictures/Wallpapers"
+  as_user ln -sf "$DOTFILES_REPO/wallpapers" "$HOME_DIR/Pictures/Wallpapers"
   
   as_user mkdir -p "$HOME_DIR/Templates"
   as_user touch "$HOME_DIR/Templates/new"
