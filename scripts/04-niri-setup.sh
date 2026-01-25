@@ -421,7 +421,7 @@ if [ -d "$DOTFILES_REPO/dotfiles" ]; then
     REPO_BOOKMARKS="$DOTFILES_REPO/dotfiles/.config/gtk-3.0/bookmarks"
     if [ -L "$BOOKMARKS_FILE" ] || [ -f "$REPO_BOOKMARKS" ]; then
         [ -L "$BOOKMARKS_FILE" ] && as_user rm "$BOOKMARKS_FILE"
-        as_user cp "$REPO_BOOKMARKS" "$BOOKMARKS_FILE"
+        as_user cp -rf "$REPO_BOOKMARKS" "$BOOKMARKS_FILE"
         as_user sed -i "s/shorin/$TARGET_USER/g" "$BOOKMARKS_FILE"
         log "Updated GTK bookmarks."
     fi
