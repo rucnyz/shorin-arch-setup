@@ -294,66 +294,150 @@ else
 fi
 
 # ==============================================================================
-# STEP 6: Dotfiles
+# STEP 6: Dotfiles (Smart Recursive Symlink)
 # ==============================================================================
 section "Step 5/9" "Deploying Dotfiles"
 
 REPO_GITHUB="https://github.com/SHORiN-KiWATA/ShorinArchExperience-ArchlinuxGuide.git"
-REPO_GITEE="https://gitee.com/shorinkiwata/ShorinArchExperience-ArchlinuxGuide.git"
-TEMP_DIR="/tmp/shorin-repo"
-rm -rf "$TEMP_DIR"
 
-log "Cloning configuration..."
-if ! as_user git clone --depth 1 "$REPO_GITHUB" "$TEMP_DIR"; then
-  warn "GitHub failed. Trying Gitee..."
-  rm -rf "$TEMP_DIR"
-  if ! as_user git clone "$REPO_GITEE" "$TEMP_DIR"; then
-    critical_failure_handler "Failed to clone dotfiles from any source."
+# 1. 仓库位置：放在 .local/share 下，不污染 home 根目录
+DOTFILES_REPO="$HOME_DIR/.local/share/shorin-niri"
+
+# --- Smart Linking Function ---
+# 核心逻辑：只链接“叶子”节点，对于“容器”目录（.config, .local, share）则递归进入
+link_recursive() {
+  local src_dir="$1"
+  local dest_dir="$2"
+  local exclude_list="$3"
+
+  # 确保目标容器目录存在 (比如确保 ~/.local/share 存在)
+  as_user mkdir -p "$dest_dir"
+
+  find "$src_dir" -mindepth 1 -maxdepth 1 -not -path '*/.git*' | while read -r src_path; do
+    local item_name
+    item_name=$(basename "$src_path")
+
+    # 0. 排除检查
+    if echo "$exclude_list" | grep -qw "$item_name"; then
+      log "Skipping excluded: $item_name"
+      continue
+    fi
+
+    # 1. 判断是否是需要“穿透”的系统目录
+    # 规则：如果遇到 .config, .local，或者 .local 下面的 share/bin，不要链接，而是递归
+    local need_recurse=false
+
+    if [ "$item_name" == ".config" ]; then
+        need_recurse=true
+    elif [ "$item_name" == ".local" ]; then
+        need_recurse=true
+    # 只有当父目录名字是以 .local 结尾时，才穿透 share 和 bin
+    elif [[ "$src_dir" == *".local" ]] && { [ "$item_name" == "share" ] || [ "$item_name" == "bin" ]; }; then
+        need_recurse=true
+    fi
+
+    if [ "$need_recurse" = true ]; then
+        # 递归进入：传入当前路径作为新的源和目标
+        link_recursive "$src_path" "$dest_dir/$item_name" "$exclude_list"
+    else
+        # 2. 具体的配置文件夹/文件（如 fcitx5, niri, .zshrc） -> 执行链接
+        local target_path="$dest_dir/$item_name"
+        
+        # 先清理旧的目标（无论是文件、文件夹还是死链）
+        if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+            as_user rm -rf "$target_path"
+        fi
+        
+        # 创建软链接
+        # 效果：~/.local/share/fcitx5 -> ~/.local/share/shorin-niri/dotfiles/.local/share/fcitx5
+        as_user ln -sf "$src_path" "$target_path"
+    fi
+  done
+}
+
+# --- Execution ---
+
+# 1. 准备仓库
+prepare_repository() {
+  local TARGET_DIRS=("dotfiles" "wallpapers")
+  # 建议定义一个变量指定主分支名，防止以后 Github 变成 other-branch
+  local BRANCH_NAME="main" 
+
+  if [ ! -d "$DOTFILES_REPO" ]; then
+    log "Initializing Sparse & Shallow Checkout to $DOTFILES_REPO..."
+    as_user mkdir -p "$DOTFILES_REPO"
+    
+    as_user git -C "$DOTFILES_REPO" init
+    # 强制将本地分支名设为 main，避免本地是 master 远程是 main 造成的混乱
+    as_user git -C "$DOTFILES_REPO" branch -m "$BRANCH_NAME"
+    
+    as_user git -C "$DOTFILES_REPO" config core.sparseCheckout true
+    local sparse_file="$DOTFILES_REPO/.git/info/sparse-checkout"
+    for item in "${TARGET_DIRS[@]}"; do
+      echo "$item" | as_user tee -a "$sparse_file" >/dev/null
+    done
+    
+    as_user git -C "$DOTFILES_REPO" remote add origin "$REPO_GITHUB"
+    
+    log "Downloading latest snapshot (Github)..."
+    # 修复点 2：同样明确指定 origin main
+    if ! as_user git -C "$DOTFILES_REPO" pull origin "$BRANCH_NAME" --depth 1; then # <--- 修改
+      critical_failure_handler "Failed to download dotfiles (Sparse+Shallow failed)."
+    else 
+      git -C "$DOTFILES_REPO" branch --set-upstream-to=origin/main main
+    fi
+
   fi
-fi
+}
 
-if [ -d "$TEMP_DIR/dotfiles" ]; then
-  # Filter Exclusions
+prepare_repository
+
+# 2. 执行链接
+if [ -d "$DOTFILES_REPO/dotfiles" ]; then
+  EXCLUDE_LIST=""
   if [ "$TARGET_USER" != "shorin" ]; then
     EXCLUDE_FILE="$PARENT_DIR/exclude-dotfiles.txt"
     if [ -f "$EXCLUDE_FILE" ]; then
-      log "Processing exclusions..."
-      while IFS= read -r item; do
-        item=$(echo "$item" | tr -d '\r' | xargs)
-        [ -n "$item" ] && [[ ! "$item" =~ ^# ]] && rm -rf "$TEMP_DIR/dotfiles/.config/$item"
-      done <"$EXCLUDE_FILE"
+      log "Loading exclusions..."
+      EXCLUDE_LIST=$(grep -vE "^\s*#|^\s*$" "$EXCLUDE_FILE" | tr '\n' ' ')
     fi
   fi
 
-  # Backup & Apply
-  log "Backing up & Applying..."
+  log "Backing up existing configs..."
   as_user tar -czf "$HOME_DIR/config_backup_$(date +%s).tar.gz" -C "$HOME_DIR" .config
-  as_user cp -rf "$TEMP_DIR/dotfiles/." "$HOME_DIR/"
 
-# Post-Process
+  # 调用递归函数：从 dotfiles 根目录开始，目标是 HOME
+  link_recursive "$DOTFILES_REPO/dotfiles" "$HOME_DIR" "$EXCLUDE_LIST"
+
+  # --- Post-Process (防止污染 git 的修正) ---
+  OUTPUT_EXAMPLE_KDL="$HOME_DIR/.config/niri/output-example.kdl"
+  OUTPUT_KDL="$HOME_DIR/.config/niri/output.kdl"
   if [ "$TARGET_USER" != "shorin" ]; then
-    as_user truncate -s 0 "$HOME_DIR/.config/niri/output.kdl" 2>/dev/null
-    
-    # 定义书签文件路径
+
+    as_user touch $OUTPUT_KDL
+
+    # 修复 Bookmarks (转为实体文件并修改)
     BOOKMARKS_FILE="$HOME_DIR/.config/gtk-3.0/bookmarks"
-    
-    # 如果文件存在，则执行替换操作
-    if [ -f "$BOOKMARKS_FILE" ]; then
-        # 使用 sed 将文件中的 "shorin" 全部替换为当前目标用户名
-        # 使用 as_user 确保文件权限不会变成 root
-        as_user sed -i "s/shorin/$TARGET_USER/g" "$BOOKMARKS_FILE"
-        log "Updated GTK bookmarks path from 'shorin' to '$TARGET_USER'."
+    REPO_BOOKMARKS="$DOTFILES_REPO/dotfiles/.config/gtk-3.0/bookmarks"
+    if [ -f "$REPO_BOOKMARKS" ]; then
+        as_user sed -i "s/shorin/$TARGET_USER/g" "$REPO_BOOKMARKS"
+        log "Updated GTK bookmarks."
     fi
-    # --- 修改结束 ---
+
+  else
+    as_user cp "$DOTFILES_REPO/dotfiles/.config/niri/output-example.kdl" "$OUTPUT_KDL"
   fi
 
-  # Fix Symlinks & Permissions
+  # GTK Theme Symlinks (Fix internal links)
   GTK4="$HOME_DIR/.config/gtk-4.0"
   THEME="$HOME_DIR/.themes/adw-gtk3-dark/gtk-4.0"
-  as_user rm -f "$GTK4/gtk.css" "$GTK4/gtk-dark.css"
-  as_user ln -sf "$THEME/gtk-dark.css" "$GTK4/gtk-dark.css"
-  as_user ln -sf "$THEME/gtk.css" "$GTK4/gtk.css"
-
+  if [ -d "$GTK4" ]; then
+      as_user rm -f "$GTK4/gtk.css" "$GTK4/gtk-dark.css"
+      as_user ln -sf "$THEME/gtk-dark.css" "$GTK4/gtk-dark.css"
+      as_user ln -sf "$THEME/gtk.css" "$GTK4/gtk.css"
+  fi
+  
+  # Flatpak overrides
   if command -v flatpak &>/dev/null; then
     as_user flatpak override --user --filesystem="$HOME_DIR/.themes"
     as_user flatpak override --user --filesystem=xdg-config/gtk-4.0
@@ -361,26 +445,25 @@ if [ -d "$TEMP_DIR/dotfiles" ]; then
     as_user flatpak override --user --env=GTK_THEME=adw-gtk3-dark
     as_user flatpak override --user --filesystem=xdg-config/fontconfig
   fi
-  success "Dotfiles Applied."
+  success "Dotfiles Linked."
 else
-  warn "Dotfiles missing in temp directory."
+  warn "Dotfiles missing in repo directory."
 fi
 
-
 # ==============================================================================
-# STEP 7: Wallpapers & Templates
+# STEP 7: Wallpapers
 # ==============================================================================
 section "Step 6/9" "Wallpapers"
-if [ -d "$TEMP_DIR/wallpapers" ]; then
-  as_user mkdir -p "$HOME_DIR/Pictures/Wallpapers"
-  as_user cp -rf "$TEMP_DIR/wallpapers/." "$HOME_DIR/Pictures/Wallpapers/"
+# 更新引用路径
+if [ -d "$DOTFILES_REPO/wallpapers" ]; then
+  as_user ln -sf "$DOTFILES_REPO/wallpapers" "$HOME_DIR/Pictures/Wallpapers"
+  
+  as_user mkdir -p "$HOME_DIR/Templates"
   as_user touch "$HOME_DIR/Templates/new"
-  as_user touch "$HOME_DIR/Templates/new.sh"
-  as_user echo "#!/bin/bash" >> "$HOME_DIR/Templates/new.sh"
+  echo "#!/bin/bash" | as_user tee "$HOME_DIR/Templates/new.sh" >/dev/null
+  as_user chmod +x "$HOME_DIR/Templates/new.sh"
   success "Installed."
 fi
-rm -rf "$TEMP_DIR"
-
 # ==============================================================================
 # STEP 8: Hardware Tools
 # ==============================================================================
