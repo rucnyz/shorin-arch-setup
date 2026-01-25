@@ -7,3 +7,4 @@ Thunar
 ulauncher
 wofi
 xfce4
+niriswitcher
