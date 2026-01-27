@@ -461,15 +461,16 @@ hide_desktop_file "/usr/share/applications/xfce4-about.desktop"
 
 # --- Post-Dotfiles Configuration: Firefox ---
 section "Config" "Firefox UI Customization"
+MOZILLA_DIR="$HOME_DIR/.config/mozilla"
 
-if [ -d "$HOME_DIR/.mozilla" ]; then 
-    log "Backing up existing .mozilla directory..."
-    mv "$HOME_DIR/.mozilla" "$HOME_DIR/.mozilla.bak.$(date +%s)"
+if [ -d "$MOZILLA_DIR" ]; then 
+    log "Backing up existing mozilla directory..."
+    mv "$HMOZILLA_DIR" "$MOZILLA_DIR.bak.$(date +%s)"
 fi
     
-mkdir -p "$HOME_DIR/.mozilla"
-cp -rf "$PARENT_DIR/resources/firefox" "$HOME_DIR/.mozilla/"
-chown -R "$TARGET_USER:$TARGET_USER" "$HOME_DIR/.mozilla"
+mkdir -p "$MOZILLA_DIR"
+cp -rf "$PARENT_DIR/resources/firefox" "$MOZILLA_DIR/"
+chown -R "$TARGET_USER" "$MOZILLA_DIR"
 
 section "Config" "clash tun"
 
