@@ -1,35 +1,19 @@
+# rucnyz's Arch Setup
 
-## 使用方法
+Personal fork of [SHORiN-KiWATA/shorin-arch-setup](https://github.com/SHORiN-KiWATA/shorin-arch-setup) with my customized dotfiles.
 
-1. 安装一个archlinux系统
+## Usage
 
-2. 登录之后从tty运行以下命令
-    
+```bash
+sudo pacman -Syu git && git clone https://github.com/rucnyz/shorin-arch-setup.git && cd shorin-arch-setup && sudo bash install.sh
+```
 
-    - 短链接
+## Changes from upstream
 
-        ```
-        bash <(curl -L is.gd/shorinsetup)
-        ```
-        
-    - 手动克隆
-
-        ```
-        # 1. 安装 git
-        sudo pacman -Syu git
-
-        # 2. 克隆仓库
-        git clone https://github.com/SHORiN-KiWATA/shorin-arch-setup.git
-
-        # 3. 进入目录并运行
-        cd shorin-arch-setup
-        sudo bash install.sh
-        ```
-        一条命令版
-
-        ```
-        sudo pacman -Syu git && git clone https://github.com/SHORiN-KiWATA/shorin-arch-setup.git && cd shorin-arch-setup && sudo bash install.sh
-        ```
+- Uses my personal dotfiles from [rucnyz/ShorinArchExperience-ArchlinuxGuide](https://github.com/rucnyz/ShorinArchExperience-ArchlinuxGuide)
+- Custom scripts: cursor/pycharm/zed workspace pickers, ssh-picker, etc.
+- Zsh configuration with fzf, zoxide, direnv integration
+- 4K@120Hz dual monitor setup
 
 ## 更新计划
 
