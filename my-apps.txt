@@ -1,0 +1,91 @@
+# === My Apps (Auto-install, select all) ===
+
+# --- Shell & CLI ---
+zsh                                      # Z Shell
+zsh-autosuggestions                      # Fish-like autosuggestions
+zsh-completions                          # Additional completions
+zsh-syntax-highlighting                  # Syntax highlighting
+bat                                      # Cat with syntax highlighting
+fd                                       # Fast find alternative
+tldr                                     # Simplified man pages
+tmux                                     # Terminal multiplexer
+duf                                      # Disk usage utility
+ncdu                                     # NCurses disk usage
+micro                                    # Modern terminal editor
+direnv                                   # Directory env vars
+lazygit                                  # Git TUI
+github-cli                               # GitHub CLI
+
+# --- Development ---
+docker                                   # Container runtime
+docker-buildx                            # Docker build plugin
+jdk-openjdk                              # Java JDK
+texlive                                  # TeX Live (full)
+
+# --- Browsers ---
+AUR:google-chrome                        # Chrome
+AUR:microsoft-edge-stable-bin            # Edge
+AUR:zen-browser-bin                      # Zen browser
+
+# --- IDE & Editors ---
+code                                     # VSCode
+AUR:cursor-bin                           # Cursor AI editor
+AUR:jetbrains-toolbox                    # JetBrains IDEs
+obsidian                                 # Markdown knowledge base
+AUR:typora-free                          # Markdown editor
+
+# --- Communication ---
+AUR:telegram-desktop-bin                 # Telegram
+AUR:slack-desktop                        # Slack
+AUR:notion-app-electron                  # Notion
+AUR:linuxqq-appimage                     # QQ
+AUR:wechat-appimage                      # WeChat
+
+# --- Media ---
+AUR:spotify                              # Music streaming
+obs-studio                               # Streaming & recording
+mpv                                      # Video player
+thunderbird                              # Email client
+
+# --- Network & Sync ---
+AUR:clash-verge-rev                      # Clash GUI
+AUR:cloudflare-warp-bin                  # Cloudflare WARP
+autossh                                  # Auto-reconnect SSH
+syncthing                                # File sync
+AUR:syncthingtray                        # Syncthing tray
+rsync                                    # File transfer
+reflector                                # Mirror updater
+
+# --- System Utilities ---
+blueman                                  # Bluetooth GUI
+bluez-utils                              # Bluetooth CLI
+curtail                                  # Image compressor
+gnome-text-editor                        # Text editor
+AUR:termius                              # SSH client
+AUR:opencode-desktop-bin                 # OpenCode AI
+
+# --- Existing from applist ---
+baobab                                   # Disk analyzer
+btop                                     # System monitor
+dosfstools                               # FAT tools
+exfat-utils                              # exFAT tools
+f2fs-tools                               # F2FS tools
+flatseal                                 # Flatpak permissions
+gnome-calendar                           # Calendar
+gnome-clocks                             # Clocks
+gnome-disk-utility                       # Disk utility
+gnome-font-viewer                        # Font viewer
+gnome-software                           # Software center
+localsend                                # Local file sharing
+mission-center                           # Task manager
+ntfs-3g                                  # NTFS driver
+protonplus                               # Proton manager
+udftools                                 # UDF tools
+virt-manager                             # VM manager
+vim                                      # Vim
+tree                                     # Directory tree
+wev                                      # Wayland event viewer
+xfsprogs                                 # XFS tools
+yazi                                     # TUI file manager
+AUR:lsfg-vk-bin                          # Frame generator
+AUR:mangojuice-bin                       # MangoHud GUI

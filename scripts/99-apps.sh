@@ -44,7 +44,7 @@ as_user() {
 }
 
 # ------------------------------------------------------------------------------
-# 1. List Selection & User Prompt
+# 1. List Selection & User Prompt (Two-phase: my-apps.txt + optional)
 # ------------------------------------------------------------------------------
 if [ "$DESKTOP_ENV" == "kde" ]; then
     LIST_FILENAME="kde-common-applist.txt"
@@ -52,6 +52,7 @@ else
     LIST_FILENAME="common-applist.txt"
 fi
 LIST_FILE="$PARENT_DIR/$LIST_FILENAME"
+MY_APPS_FILE="$PARENT_DIR/my-apps.txt"
 
 REPO_APPS=()
 AUR_APPS=()
@@ -59,55 +60,39 @@ FLATPAK_APPS=()
 FAILED_PACKAGES=()
 INSTALL_LAZYVIM=false
 
-if [ ! -f "$LIST_FILE" ]; then
-    warn "File $LIST_FILENAME not found. Skipping."
-    trap - INT
-    exit 0
-fi
-
-if ! grep -q -vE "^\s*#|^\s*$" "$LIST_FILE"; then
-    warn "App list is empty. Skipping."
-    trap - INT
-    exit 0
-fi
-
-echo ""
-echo -e "   Selected List: ${BOLD}$LIST_FILENAME${NC}"
-echo -e "   ${H_YELLOW}>>> Do you want to install common applications?${NC}"
-echo -e "   ${H_CYAN}    [ENTER] = Select packages${NC}"
-echo -e "   ${H_CYAN}    [N]     = Skip installation${NC}"
-echo -e "   ${H_YELLOW}    [Timeout 60s] = Auto-install ALL default packages (No FZF)${NC}"
-echo ""
-
-read -t 60 -p "   Please select [Y/n]: " choice
-READ_STATUS=$?
-
 SELECTED_RAW=""
 
-# Case 1: Timeout (Auto Install ALL)
-if [ $READ_STATUS -ne 0 ]; then
-    echo "" 
-    warn "Timeout reached (60s). Auto-installing ALL applications from list..."
-    SELECTED_RAW=$(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | sed -E 's/[[:space:]]+#/\t#/')
-
-# Case 2: User Input
-else
-    choice=${choice:-Y}
-    if [[ "$choice" =~ ^[nN]$ ]]; then
-        warn "User skipped application installation."
-        trap - INT
-        exit 0
-    else
+# ------------------------------------------------------------------------------
+# Phase 1: Install my-apps.txt (if exists) - Auto select all
+# ------------------------------------------------------------------------------
+if [ -f "$MY_APPS_FILE" ] && grep -q -vE "^\s*#|^\s*$" "$MY_APPS_FILE"; then
+    MY_APPS_COUNT=$(grep -cvE "^\s*#|^\s*$" "$MY_APPS_FILE")
+    echo ""
+    echo -e "   ${H_GREEN}Found personal app list: my-apps.txt ($MY_APPS_COUNT packages)${NC}"
+    echo -e "   ${H_YELLOW}>>> Install your personal apps?${NC}"
+    echo -e "   ${H_CYAN}    [ENTER/Y] = Install all (recommended)${NC}"
+    echo -e "   ${H_CYAN}    [S]       = Select packages with fzf${NC}"
+    echo -e "   ${H_CYAN}    [N]       = Skip${NC}"
+    echo ""
+    
+    read -t 30 -p "   Please select [Y/s/n]: " my_choice
+    MY_READ_STATUS=$?
+    
+    if [ $MY_READ_STATUS -ne 0 ] || [[ "${my_choice:-Y}" =~ ^[Yy]$ ]]; then
+        # Auto install all from my-apps.txt
+        log "Installing all packages from my-apps.txt..."
+        SELECTED_RAW=$(grep -vE "^\s*#|^\s*$" "$MY_APPS_FILE" | sed -E 's/[[:space:]]+#/\t#/')
+    elif [[ "$my_choice" =~ ^[Ss]$ ]]; then
+        # FZF selection with all pre-selected
         clear
-        echo -e "\n  Loading application list..."
-        
-        SELECTED_RAW=$(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | \
+        echo -e "\n  Loading personal app list..."
+        SELECTED_RAW=$(grep -vE "^\s*#|^\s*$" "$MY_APPS_FILE" | \
             sed -E 's/[[:space:]]+#/\t#/' | \
             fzf --multi \
                 --layout=reverse \
                 --border \
                 --margin=1,2 \
-                --prompt="Search App > " \
+                --prompt="[MY APPS] Search > " \
                 --pointer=">>" \
                 --marker="* " \
                 --delimiter=$'\t' \
@@ -125,15 +110,91 @@ else
                 --color=info:magenta \
                 --color=prompt:cyan,pointer:cyan:bold,marker:green:bold \
                 --color=spinner:yellow)
-        
         clear
+    else
+        log "Skipped personal apps."
+    fi
+fi
+
+# ------------------------------------------------------------------------------
+# Phase 2: Optional apps from common-applist.txt (exclude already selected)
+# ------------------------------------------------------------------------------
+if [ -f "$LIST_FILE" ] && grep -q -vE "^\s*#|^\s*$" "$LIST_FILE"; then
+    # Build list of already selected package names (strip AUR:/flatpak: prefixes)
+    ALREADY_SELECTED=""
+    if [ -n "$SELECTED_RAW" ]; then
+        ALREADY_SELECTED=$(echo "$SELECTED_RAW" | cut -f1 -d$'\t' | sed 's/^AUR://; s/^flatpak://' | xargs)
+    fi
+    
+    # Filter out already selected packages
+    OPTIONAL_LIST=$(grep -vE "^\s*#|^\s*$" "$LIST_FILE" | while read -r line; do
+        pkg_name=$(echo "$line" | sed -E 's/[[:space:]]+#.*//' | sed 's/^AUR://; s/^flatpak://' | xargs)
+        if [ -n "$ALREADY_SELECTED" ] && echo "$ALREADY_SELECTED" | grep -qw "$pkg_name"; then
+            continue
+        fi
+        echo "$line"
+    done)
+    
+    OPTIONAL_COUNT=$(echo "$OPTIONAL_LIST" | grep -cvE "^\s*$" 2>/dev/null || echo 0)
+    
+    if [ "$OPTIONAL_COUNT" -gt 0 ]; then
+        echo ""
+        echo -e "   ${H_CYAN}Optional apps available: $OPTIONAL_COUNT packages${NC}"
+        echo -e "   ${H_YELLOW}>>> Browse optional apps?${NC}"
+        echo -e "   ${H_CYAN}    [ENTER/Y] = Select with fzf (nothing pre-selected)${NC}"
+        echo -e "   ${H_CYAN}    [N]       = Skip${NC}"
+        echo ""
         
-        if [ -z "$SELECTED_RAW" ]; then
-            log "Skipping application installation (User cancelled selection)."
-            trap - INT
-            exit 0
+        read -t 30 -p "   Please select [Y/n]: " opt_choice
+        OPT_READ_STATUS=$?
+        
+        if [ $OPT_READ_STATUS -eq 0 ] && [[ "${opt_choice:-Y}" =~ ^[Yy]$ ]]; then
+            clear
+            echo -e "\n  Loading optional apps..."
+            OPTIONAL_SELECTED=$(echo "$OPTIONAL_LIST" | \
+                sed -E 's/[[:space:]]+#/\t#/' | \
+                fzf --multi \
+                    --layout=reverse \
+                    --border \
+                    --margin=1,2 \
+                    --prompt="[OPTIONAL] Search > " \
+                    --pointer=">>" \
+                    --marker="* " \
+                    --delimiter=$'\t' \
+                    --with-nth=1 \
+                    --bind 'ctrl-a:select-all,ctrl-d:deselect-all' \
+                    --info=inline \
+                    --header="[TAB] TOGGLE | [ENTER] INSTALL | [CTRL-A] SE-ALL | Nothing pre-selected" \
+                    --preview "echo {} | cut -f2 -d$'\t' | sed 's/^# //'" \
+                    --preview-window=right:45%:wrap:border-left \
+                    --color=dark \
+                    --color=fg+:white,bg+:black \
+                    --color=hl:blue,hl+:blue:bold \
+                    --color=header:yellow:bold \
+                    --color=info:magenta \
+                    --color=prompt:cyan,pointer:cyan:bold,marker:green:bold \
+                    --color=spinner:yellow)
+            clear
+            
+            # Append optional selections
+            if [ -n "$OPTIONAL_SELECTED" ]; then
+                if [ -n "$SELECTED_RAW" ]; then
+                    SELECTED_RAW="$SELECTED_RAW"$'\n'"$OPTIONAL_SELECTED"
+                else
+                    SELECTED_RAW="$OPTIONAL_SELECTED"
+                fi
+            fi
+        else
+            log "Skipped optional apps."
         fi
     fi
+fi
+
+# Check if anything was selected
+if [ -z "$SELECTED_RAW" ]; then
+    warn "No packages selected. Skipping application installation."
+    trap - INT
+    exit 0
 fi
 
 # ------------------------------------------------------------------------------
