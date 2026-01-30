@@ -89,3 +89,4 @@ xfsprogs                                 # XFS tools
 yazi                                     # TUI file manager
 AUR:lsfg-vk-bin                          # Frame generator
 AUR:mangojuice-bin                       # MangoHud GUI
+timg                                     # View images in terminal
