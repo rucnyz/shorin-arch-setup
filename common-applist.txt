@@ -7,6 +7,28 @@ yazi                                     # great tui file manager
 btop                                     # great tui mission center / system info
 fcitx5-mozc                              # Japanese Input Method
 nm-connection-editor                     # Advanced network editor
+
+# --- Shell & CLI Enhancements ---
+zsh                                      # Z Shell
+zsh-autosuggestions                      # Fish-like autosuggestions for zsh
+zsh-completions                          # Additional completions for zsh
+zsh-syntax-highlighting                  # Syntax highlighting for zsh
+bat                                      # Cat clone with syntax highlighting
+fd                                       # Simple, fast alternative to find
+tldr                                     # Simplified man pages
+tmux                                     # Terminal multiplexer
+duf                                      # Disk usage utility
+ncdu                                     # NCurses disk usage analyzer
+micro                                    # Modern terminal text editor
+direnv                                   # Directory-based environment variables
+lazygit                                  # Simple terminal UI for git
+github-cli                               # GitHub CLI tool
+
+# --- Development ---
+docker                                   # Container runtime
+docker-buildx                            # Docker CLI plugin for extended build
+jdk-openjdk                              # OpenJDK Java Development Kit
+
 # --- Gaming & Media ---
 steam                                    # Gaming Platform (Valve)
 lutris                                   # Gaming outside steam
@@ -19,11 +41,17 @@ gamescope                                # gaming conpositor made by Valve
 upscaler                                 # image upscaler (make it more clear)
 lact                                     # GPU Control Tool (Overclocking/Fan)
 obs-studio                               # OBS Studio (Streaming & Recording)
+
 # --- System Utilities ---
 gnome-disk-utility                       # Disk Management Utility (Disks)
 baobab                                   # Disk Usage Analyzer
 mission-center                           # System Monitor (Task Manager style)
-flatseal                                 # flatpak permission manager 
+flatseal                                 # flatpak permission manager
+blueman                                  # Bluetooth manager GUI
+bluez-utils                              # Bluetooth utilities (bluetoothctl)
+curtail                                  # Image compressor
+gnome-text-editor                        # Simple GNOME text editor
+
 # --- Filesystem Support ---
 dosfstools                               # Tools for FAT12/16/32 filesystems
 ntfs-3g                                  # NTFS filesystem driver
@@ -32,12 +60,23 @@ f2fs-tools                               # Tools for Flash-Friendly File System
 udftools                                 # Tools for UDF filesystems (DVD/Optical)
 xfsprogs                                 # Tools for XFS filesystems
 
+# --- Network & Sync ---
+autossh                                  # Auto-reconnecting SSH sessions
+syncthing                                # Continuous file synchronization
+rsync                                    # Fast incremental file transfer
+reflector                                # Pacman mirror list updater
+
 # --- Others ---
 code                                     # vscode
 gnome-font-viewer                        # manage fonts easily
 gnome-calendar                           # calendar
 gnome-clocks                             # clocks
 localsend                                # send files to other devices
+thunderbird                              # Email client
+obsidian                                 # Markdown knowledge base
+tree                                     # Directory listing as tree
+vim                                      # Vi IMproved text editor
+wev                                      # Wayland event viewer (debugging)
 
 # --- AUR Packages ---
 AUR:linuxqq-appimage                     # Tencent QQ (AppImage)
@@ -46,6 +85,21 @@ AUR:typora-free                          # markdown editor
 AUR:lsfg-vk-bin                          # yellow duck frame generator
 AUR:mangojuice-bin                       # GUI for mangohud                
 AUR:flclash-bin                          # Sometimes a detour is necessary to solve a problem
+AUR:cursor-bin                           # AI-powered code editor
+AUR:jetbrains-toolbox                    # JetBrains IDE manager
+AUR:google-chrome                        # Google Chrome browser
+AUR:microsoft-edge-stable-bin            # Microsoft Edge browser
+AUR:zen-browser-bin                      # Privacy-focused Firefox fork
+AUR:telegram-desktop-bin                 # Telegram messenger
+AUR:slack-desktop                        # Slack team communication
+AUR:notion-app-electron                  # Notion workspace
+AUR:opencode-desktop-bin                 # OpenCode AI coding assistant
+AUR:spotify                              # Spotify music streaming
+AUR:termius                              # SSH client with sync
+AUR:syncthingtray                        # Syncthing system tray
+AUR:clash-verge-rev                      # Clash GUI client
+AUR:cloudflare-warp-bin                  # Cloudflare WARP VPN
+
 # --- Flatpak Packages ---      
 flatpak:it.mijorus.gearlever             # AppImage Manager
 flatpak:io.github.fabrialberio.pinapp    # PinApp (modify .desktop files)
