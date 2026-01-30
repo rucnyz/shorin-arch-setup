@@ -156,7 +156,8 @@ fi
 # ==============================================================================
 section "Step 1/9" "Core Components"
 PKGS="niri xdg-desktop-portal-gnome fuzzel kitty firefox libnotify mako polkit-gnome"
-exe pacman -S --noconfirm --needed $PKGS
+BUILD_DEPS="meson ninja rust base-devel git"
+exe pacman -S --noconfirm --needed $PKGS $BUILD_DEPS
 
 log "Configuring Firefox Policies..."
 POL_DIR="/etc/firefox/policies"
@@ -486,6 +487,71 @@ if pacman -Q swayosd &>/dev/null; then
   systemctl enable --now swayosd-libinput-backend.service >/dev/null 2>&1
 fi
 success "Tools configured."
+
+# ==============================================================================
+# STEP 8: Custom Builds (Waybar + nirinit)
+# ==============================================================================
+section "Step 8/9" "Custom Builds"
+
+# --- Waybar (custom fork with niri support) ---
+WAYBAR_REPO="https://github.com/rucnyz/Waybar.git"
+WAYBAR_DIR="$HOME_DIR/.local/share/Waybar"
+
+if command -v meson &>/dev/null && command -v ninja &>/dev/null; then
+  log "Building Waybar from source..."
+  
+  if [ -d "$WAYBAR_DIR" ]; then
+    log "Updating existing repo..."
+    as_user git -C "$WAYBAR_DIR" pull --ff-only || true
+  else
+    log "Cloning Waybar..."
+    as_user git clone "$WAYBAR_REPO" "$WAYBAR_DIR"
+  fi
+  
+  if [ -d "$WAYBAR_DIR" ]; then
+    log "Compiling Waybar (this may take a few minutes)..."
+    as_user bash -c "cd '$WAYBAR_DIR' && meson setup build --prefix='$HOME_DIR/.local' -Dexperimental=true 2>/dev/null || true"
+    if as_user ninja -C "$WAYBAR_DIR/build" 2>/dev/null; then
+      as_user ninja -C "$WAYBAR_DIR/build" install 2>/dev/null
+      success "Waybar installed to ~/.local/"
+    else
+      warn "Waybar build failed. Using stock waybar."
+    fi
+  fi
+else
+  warn "meson/ninja not found. Skipping Waybar build."
+fi
+
+# --- nirinit (session manager) ---
+NIRINIT_REPO="https://github.com/rucnyz/nirinit.git"
+NIRINIT_DIR="$HOME_DIR/.local/share/nirinit"
+
+if command -v cargo &>/dev/null; then
+  log "Building nirinit from source..."
+  
+  if [ -d "$NIRINIT_DIR" ]; then
+    log "Updating existing repo..."
+    as_user git -C "$NIRINIT_DIR" pull --ff-only || true
+  else
+    log "Cloning nirinit..."
+    as_user git clone "$NIRINIT_REPO" "$NIRINIT_DIR"
+  fi
+  
+  if [ -d "$NIRINIT_DIR" ]; then
+    log "Compiling nirinit..."
+    if as_user bash -c "cd '$NIRINIT_DIR' && cargo build --release" >/dev/null 2>&1; then
+      as_user mkdir -p "$HOME_DIR/.local/bin"
+      as_user cp "$NIRINIT_DIR/target/release/nirinit" "$HOME_DIR/.local/bin/"
+      as_user chmod +x "$HOME_DIR/.local/bin/nirinit"
+      success "nirinit installed to ~/.local/bin/"
+    else
+      warn "nirinit build failed. Skipping."
+    fi
+  fi
+else
+  warn "Rust/cargo not found. Skipping nirinit."
+  info_kv "Hint" "Install rust: pacman -S rustup && rustup default stable"
+fi
 
 # ==============================================================================
 # STEP 9: Cleanup & Auto-Login
