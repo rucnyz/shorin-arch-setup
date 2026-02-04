@@ -611,6 +611,25 @@ else
   log "OpenCode CLI already installed."
 fi
 
+# --- Bun + Oh My OpenCode ---
+if ! command -v bun &>/dev/null; then
+  log "Installing Bun..."
+  if as_user bash -c "curl -fsSL https://bun.sh/install | bash" >/dev/null 2>&1; then
+    success "Bun installed."
+  else
+    warn "Bun installation failed."
+  fi
+fi
+
+if command -v bun &>/dev/null || [ -f "$HOME_DIR/.bun/bin/bun" ]; then
+  log "Installing Oh My OpenCode..."
+  if as_user bash -c "source ~/.bashrc 2>/dev/null; ~/.bun/bin/bunx oh-my-opencode install" >/dev/null 2>&1; then
+    success "Oh My OpenCode installed."
+  else
+    warn "Oh My OpenCode installation failed."
+  fi
+fi
+
 # ==============================================================================
 # STEP 9: Cleanup & Auto-Login
 # ==============================================================================
