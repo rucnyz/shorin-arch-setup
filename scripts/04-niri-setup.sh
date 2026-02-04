@@ -587,6 +587,30 @@ else
   log "tmux not installed. Skipping Oh My Tmux setup."
 fi
 
+# --- Claude CLI ---
+if ! command -v claude &>/dev/null; then
+  log "Installing Claude CLI..."
+  if as_user bash -c "curl -fsSL https://claude.ai/install.sh | bash" >/dev/null 2>&1; then
+    success "Claude CLI installed."
+  else
+    warn "Claude CLI installation failed."
+  fi
+else
+  log "Claude CLI already installed."
+fi
+
+# --- OpenCode CLI ---
+if ! command -v opencode &>/dev/null; then
+  log "Installing OpenCode CLI..."
+  if as_user bash -c "curl -fsSL https://opencode.ai/install | bash" >/dev/null 2>&1; then
+    success "OpenCode CLI installed."
+  else
+    warn "OpenCode CLI installation failed."
+  fi
+else
+  log "OpenCode CLI already installed."
+fi
+
 # ==============================================================================
 # STEP 9: Cleanup & Auto-Login
 # ==============================================================================
