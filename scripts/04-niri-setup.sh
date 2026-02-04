@@ -599,6 +599,15 @@ else
   log "Claude CLI already installed."
 fi
 
+CLAUDE_CFG_SRC="$DOTFILES_REPO/dotfiles/.claude"
+CLAUDE_CFG_DST="$HOME_DIR/.claude"
+if [ -d "$CLAUDE_CFG_SRC" ]; then
+  as_user mkdir -p "$CLAUDE_CFG_DST"
+  [ -f "$CLAUDE_CFG_SRC/settings.json" ] && as_user cp "$CLAUDE_CFG_SRC/settings.json" "$CLAUDE_CFG_DST/"
+  [ -f "$CLAUDE_CFG_SRC/CLAUDE.md" ] && as_user cp "$CLAUDE_CFG_SRC/CLAUDE.md" "$CLAUDE_CFG_DST/"
+  log "Claude config applied."
+fi
+
 # --- OpenCode CLI ---
 if ! command -v opencode &>/dev/null; then
   log "Installing OpenCode CLI..."
