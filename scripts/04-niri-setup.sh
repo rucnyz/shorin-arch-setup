@@ -553,6 +553,40 @@ else
   info_kv "Hint" "Install rust: pacman -S rustup && rustup default stable"
 fi
 
+# --- gpakosz/.tmux (Oh My Tmux) ---
+TMUX_REPO="https://github.com/gpakosz/.tmux.git"
+TMUX_DIR="$HOME_DIR/.tmux"
+
+if command -v tmux &>/dev/null; then
+  log "Setting up Oh My Tmux..."
+  
+  if [ -d "$TMUX_DIR" ]; then
+    log "Updating existing repo..."
+    as_user git -C "$TMUX_DIR" pull --ff-only || true
+  else
+    log "Cloning gpakosz/.tmux..."
+    as_user git clone "$TMUX_REPO" "$TMUX_DIR"
+  fi
+  
+  if [ -d "$TMUX_DIR" ]; then
+    # Create symlink for main config
+    as_user ln -sf "$TMUX_DIR/.tmux.conf" "$HOME_DIR/.tmux.conf"
+    
+    # Link local config from dotfiles if exists
+    TMUX_LOCAL_SRC="$DOTFILES_REPO/dotfiles/.tmux.conf.local"
+    if [ -f "$TMUX_LOCAL_SRC" ]; then
+      as_user ln -sf "$TMUX_LOCAL_SRC" "$HOME_DIR/.tmux.conf.local"
+      success "Oh My Tmux installed with custom config."
+    else
+      # Copy default template
+      as_user cp "$TMUX_DIR/.tmux.conf.local" "$HOME_DIR/.tmux.conf.local"
+      success "Oh My Tmux installed with default config."
+    fi
+  fi
+else
+  log "tmux not installed. Skipping Oh My Tmux setup."
+fi
+
 # ==============================================================================
 # STEP 9: Cleanup & Auto-Login
 # ==============================================================================
